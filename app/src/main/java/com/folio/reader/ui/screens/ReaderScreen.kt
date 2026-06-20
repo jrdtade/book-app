@@ -71,6 +71,8 @@ fun ReaderScreen(bookId: String, back: () -> Unit) {
     var showChrome by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var pageState by remember { mutableStateOf(0 to 1) } // page, total
+    var seeking by remember { mutableStateOf(false) }
+    var seekPos by remember { mutableStateOf(0f) }
 
     DisposableEffect(Unit) {
         onDispose { vm.pauseSession() }
@@ -86,6 +88,22 @@ fun ReaderScreen(bookId: String, back: () -> Unit) {
             val html = vm.loadChapterHtml(index)
             val safe = JSONObject.quote(html)
             web.evaluateJavascript("setHtml($safe)", null)
+        }
+    }
+
+    // Jump to any point in the book from the progress slider.
+    fun seekTo(fraction: Float) {
+        val web = webViewRef ?: return
+        val n = totalChapters
+        val raw = (fraction * n).coerceIn(0f, n.toFloat())
+        val chapter = raw.toInt().coerceIn(0, n - 1)
+        val frac = (raw - chapter).coerceIn(0f, 1f)
+        web.evaluateJavascript("setPendingFraction($frac)", null)
+        if (chapter != (vm.book.value?.currentChapter ?: 0)) {
+            vm.goToChapter(chapter)
+            pushChapter(chapter, web)
+        } else {
+            web.evaluateJavascript("seekFraction($frac)", null)
         }
     }
 
@@ -108,6 +126,7 @@ fun ReaderScreen(bookId: String, back: () -> Unit) {
             put("brightness", p.brightness)
             put("flip", p.flip.name.lowercase())
             put("scroll", p.scrollMode)
+            put("tap", p.tapToTurn)
         }
         web.evaluateJavascript("applyPrefs(${JSONObject.quote(json.toString())})", null)
     }
@@ -206,12 +225,15 @@ fun ReaderScreen(bookId: String, back: () -> Unit) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
                 Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface.copy(alpha = 0.96f)).padding(16.dp, 10.dp, 16.dp, 28.dp)) {
                     val pct = b.overallProgress()
-                    androidx.compose.material3.LinearProgressIndicator(
-                        progress = { pct },
-                        modifier = Modifier.fillMaxWidth(),
+                    val shown = if (seeking) seekPos else pct
+                    Slider(
+                        value = shown,
+                        onValueChange = { seeking = true; seekPos = it },
+                        onValueChangeFinished = { seekTo(seekPos); seeking = false },
+                        valueRange = 0f..1f,
                     )
-                    Spacer(Modifier.height(6.dp))
-                    Text("${(pct * 100).toInt()}% through the book", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                    Spacer(Modifier.height(2.dp))
+                    Text("${(shown * 100).toInt()}% through the book", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
                 }
             }
         }
@@ -320,7 +342,29 @@ private fun ReaderSettingsSheet(
                 }
             }
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(8.dp))
+            Row(
+                Modifier.fillMaxWidth().clickable { onChange(prefs.copy(justify = !prefs.justify)) },
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Justified text", style = MaterialTheme.typography.bodyLarge)
+                androidx.compose.material3.Switch(checked = prefs.justify, onCheckedChange = { onChange(prefs.copy(justify = it)) })
+            }
+
+            Row(
+                Modifier.fillMaxWidth().clickable { onChange(prefs.copy(tapToTurn = !prefs.tapToTurn)) },
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Tap edges to turn", style = MaterialTheme.typography.bodyLarge)
+                    Text("Swipe always works", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                }
+                androidx.compose.material3.Switch(checked = prefs.tapToTurn, onCheckedChange = { onChange(prefs.copy(tapToTurn = it)) })
+            }
+
+            Spacer(Modifier.height(4.dp))
             Row(
                 Modifier.fillMaxWidth().clickable { onChange(prefs.copy(scrollMode = !prefs.scrollMode)) },
                 horizontalArrangement = Arrangement.SpaceBetween,

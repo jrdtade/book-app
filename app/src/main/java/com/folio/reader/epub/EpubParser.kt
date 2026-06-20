@@ -129,10 +129,10 @@ object EpubParser {
         while (event != XmlPullParser.END_DOCUMENT) {
             when (event) {
                 XmlPullParser.START_TAG -> {
-                    when (parser.name) {
+                    when (localName(parser.name)) {
                         "metadata" -> inMetadata = true
-                        "title" -> if (inMetadata) textTarget = { title = it }
-                        "creator" -> if (inMetadata) textTarget = { author = it }
+                        "title" -> if (inMetadata && title.isBlank()) textTarget = { title = it }
+                        "creator" -> if (inMetadata && author.isBlank()) textTarget = { author = it }
                         "meta" -> {
                             if (parser.getAttributeValue(null, "name") == "cover") {
                                 coverManifestId = parser.getAttributeValue(null, "content")
@@ -153,11 +153,13 @@ object EpubParser {
                     }
                 }
                 XmlPullParser.END_TAG -> {
-                    if (parser.name == "metadata") inMetadata = false
-                    if (parser.name == "title" || parser.name == "creator") textTarget = null
+                    val name = localName(parser.name)
+                    if (name == "metadata") inMetadata = false
+                    if (name == "title" || name == "creator") textTarget = null
                 }
                 XmlPullParser.TEXT -> {
-                    textTarget?.invoke(parser.text.trim())
+                    val t = parser.text?.trim().orEmpty()
+                    if (t.isNotEmpty()) textTarget?.invoke(t)
                 }
             }
             event = parser.next()
@@ -174,6 +176,11 @@ object EpubParser {
             coverHref = coverHref,
         )
     }
+
+    /** Strips an XML namespace prefix (e.g. "dc:title" -> "title") since the
+     *  parser runs with namespace processing off. */
+    private fun localName(name: String?): String =
+        name?.substringAfterLast(':') ?: ""
 
     private fun newParser(bytes: ByteArray): XmlPullParser {
         val parser = Xml.newPullParser()

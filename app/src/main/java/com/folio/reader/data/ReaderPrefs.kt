@@ -17,15 +17,17 @@ enum class PageFlip { CURL, SLIDE, FADE, NONE }
 data class ReaderPrefs(
     val theme: String = "sepia",
     val font: String = "serif",
-    val size: Int = 20,
-    val lineHeight: Float = 1.62f,
-    val margin: Int = 30,
+    val size: Int = 18,
+    val lineHeight: Float = 1.5f,
+    val margin: Int = 28,
     val bold: Boolean = false,
-    val justify: Boolean = false,
+    val justify: Boolean = true,
     val brightness: Float = 1f,
     val warmth: Float = 0f,
-    val flip: PageFlip = PageFlip.CURL,
+    val flip: PageFlip = PageFlip.SLIDE,
     val scrollMode: Boolean = false,
+    /** Whether tapping the left/right edges turns the page (swipe always works). */
+    val tapToTurn: Boolean = true,
 )
 
 object PrefKeys {
@@ -40,6 +42,7 @@ object PrefKeys {
     val WARMTH = floatPreferencesKey("warmth")
     val FLIP = stringPreferencesKey("flip")
     val SCROLL = booleanPreferencesKey("scroll")
+    val TAP = booleanPreferencesKey("tap")
 }
 
 class ReaderPrefsRepository(private val context: Context) {
@@ -47,15 +50,16 @@ class ReaderPrefsRepository(private val context: Context) {
         ReaderPrefs(
             theme = p[PrefKeys.THEME] ?: "sepia",
             font = p[PrefKeys.FONT] ?: "serif",
-            size = p[PrefKeys.SIZE] ?: 20,
-            lineHeight = p[PrefKeys.LH] ?: 1.62f,
-            margin = p[PrefKeys.MARGIN] ?: 30,
+            size = p[PrefKeys.SIZE] ?: 18,
+            lineHeight = p[PrefKeys.LH] ?: 1.5f,
+            margin = p[PrefKeys.MARGIN] ?: 28,
             bold = p[PrefKeys.BOLD] ?: false,
-            justify = p[PrefKeys.JUSTIFY] ?: false,
+            justify = p[PrefKeys.JUSTIFY] ?: true,
             brightness = p[PrefKeys.BRIGHTNESS] ?: 1f,
             warmth = p[PrefKeys.WARMTH] ?: 0f,
-            flip = runCatching { PageFlip.valueOf(p[PrefKeys.FLIP] ?: "CURL") }.getOrDefault(PageFlip.CURL),
+            flip = runCatching { PageFlip.valueOf(p[PrefKeys.FLIP] ?: "SLIDE") }.getOrDefault(PageFlip.SLIDE),
             scrollMode = p[PrefKeys.SCROLL] ?: false,
+            tapToTurn = p[PrefKeys.TAP] ?: true,
         )
     }
 
@@ -72,6 +76,7 @@ class ReaderPrefsRepository(private val context: Context) {
             p[PrefKeys.WARMTH] = prefs.warmth
             p[PrefKeys.FLIP] = prefs.flip.name
             p[PrefKeys.SCROLL] = prefs.scrollMode
+            p[PrefKeys.TAP] = prefs.tapToTurn
         }
     }
 }

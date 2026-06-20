@@ -5,20 +5,28 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover">
 <style>
   html, body { margin:0; padding:0; height:100%; width:100%; overflow:hidden; background:transparent; }
-  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; -webkit-user-select:none; user-select:none; }
   #stage { position:fixed; inset:0; overflow:hidden; }
+  /* shifter slides horizontally; #stage clips. content must NOT clip or
+     every column past the first is hidden (only first page was readable). */
   #shifter { position:absolute; inset:0; will-change:transform; }
   #content {
     position:absolute; inset:0; height:100%;
-    column-fill:auto; -webkit-column-fill:auto; overflow:hidden;
+    column-fill:auto; -webkit-column-fill:auto; overflow:visible;
+    word-wrap:break-word; overflow-wrap:break-word;
   }
-  #content p { margin:0 0 1em 0; }
+  #content p { margin:0 0 0.9em 0; }
   #content h1, #content h2, #content h3 { margin:0 0 .6em 0; line-height:1.2; }
-  #content img { max-width:100%; }
+  #content img { max-width:100%; height:auto; }
   #scrollContent {
     position:absolute; inset:0; overflow-y:auto; -webkit-overflow-scrolling:touch;
   }
-  #scrollContent p { margin:0 0 1em 0; }
+  #scrollContent p { margin:0 0 0.9em 0; }
+  #scrollContent img { max-width:100%; height:auto; }
+  /* soft page edge shadow, shown while dragging / turning */
+  #edge { position:absolute; top:0; bottom:0; width:24px; pointer-events:none;
+          opacity:0; transition:opacity .2s; z-index:4;
+          background:linear-gradient(to right, rgba(0,0,0,0.18), rgba(0,0,0,0)); }
   .warm-veil, .dim-veil { position:absolute; inset:0; pointer-events:none; transition:opacity .2s; }
   .warm-veil { background:#c98a2e; mix-blend-mode:multiply; opacity:0; z-index:5; }
   .dim-veil { background:#000; opacity:0; z-index:6; }
@@ -28,6 +36,7 @@
   <div id="stage">
     <div id="shifter"><div id="content"></div></div>
     <div id="scrollContent" style="display:none"></div>
+    <div id="edge"></div>
     <div class="warm-veil" id="warmVeil"></div>
     <div class="dim-veil" id="dimVeil"></div>
   </div>
@@ -35,6 +44,11 @@
   var prefs = {};
   var page = 0, total = 1;
   var mode = 'paged';
+  var pendingFraction = null;   // applied after next relayout (progress seek)
+
+  function stageWidth() {
+    return document.getElementById('stage').offsetWidth || window.innerWidth;
+  }
 
   function applyPrefs(json) {
     prefs = JSON.parse(json);
@@ -42,15 +56,19 @@
     document.body.style.color = prefs.fg;
     var c = document.getElementById('content');
     var sc = document.getElementById('scrollContent');
+    var justified = prefs.align === 'justify';
     [c, sc].forEach(function (el) {
       el.style.fontFamily = prefs.font;
       el.style.fontSize = prefs.size + 'px';
       el.style.lineHeight = prefs.lh;
       el.style.fontWeight = prefs.weight;
       el.style.textAlign = prefs.align;
-      el.style.padding = '88px ' + prefs.mx + 'px 84px ' + prefs.mx + 'px';
+      el.style.hyphens = justified ? 'auto' : 'manual';
+      el.style.webkitHyphens = justified ? 'auto' : 'manual';
+      el.style.padding = '64px ' + prefs.mx + 'px 72px ' + prefs.mx + 'px';
       el.style.color = prefs.fg;
     });
+    document.documentElement.lang = 'en'; // enables hyphenation dictionary
     mode = prefs.scroll ? 'scroll' : 'paged';
     c.style.display = prefs.scroll ? 'none' : 'block';
     sc.style.display = prefs.scroll ? 'block' : 'none';
@@ -68,40 +86,55 @@
   }
 
   function relayout() {
-    var stageW = document.getElementById('stage').offsetWidth || window.innerWidth;
+    var stageW = stageWidth();
     var mx = prefs.mx || 30;
     var c = document.getElementById('content');
     c.style.columnWidth = Math.max(40, stageW - 2 * mx) + 'px';
     c.style.columnGap = (2 * mx) + 'px';
     c.style.width = stageW + 'px';
     total = Math.max(1, Math.round(c.scrollWidth / stageW));
+    if (pendingFraction != null) {
+      page = Math.round(pendingFraction * (total - 1));
+      pendingFraction = null;
+    }
     page = Math.min(page, total - 1);
     goTo(page, false);
+  }
+
+  function setTransform(x, animate) {
+    var sh = document.getElementById('shifter');
+    var dur = prefs.flip === 'curl' ? 520 : 360;
+    sh.style.transition = animate ? ('transform ' + dur + 'ms cubic-bezier(.25,.8,.25,1)') : 'none';
+    sh.style.transform = 'translateX(' + x + 'px)';
   }
 
   function goTo(p, animate) {
     p = Math.max(0, Math.min(total - 1, p));
     page = p;
-    var sh = document.getElementById('shifter');
-    var c = document.getElementById('content');
-    var stageW = document.getElementById('stage').offsetWidth || window.innerWidth;
-    var dur = prefs.flip === 'curl' ? 560 : 420;
-    sh.style.transition = (animate && prefs.flip !== 'none') ? ('transform ' + dur + 'ms cubic-bezier(.3,.85,.25,1)') : 'none';
+    var stageW = stageWidth();
     if (animate && prefs.flip === 'fade') {
-      sh.style.transition = 'none';
-      sh.style.transform = 'translateX(' + (-p * stageW) + 'px)';
-      if (c.animate) c.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 380 });
+      setTransform(-p * stageW, false);
+      var c = document.getElementById('content');
+      if (c.animate) c.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300 });
     } else {
-      sh.style.transform = 'translateX(' + (-p * stageW) + 'px)';
+      setTransform(-p * stageW, animate && prefs.flip !== 'none');
     }
     report();
   }
 
   function next() { if (page < total - 1) { goTo(page + 1, true); return true; } return false; }
   function prev() { if (page > 0) { goTo(page - 1, true); return true; } return false; }
-  function jumpToStart() { goTo(0, false); }
+  function jumpToStart() { page = 0; goTo(0, false); }
   function jumpToEnd() { goTo(total - 1, false); }
   function setPage(p) { goTo(p, false); }
+
+  // Called by the native progress slider: jump within the current chapter.
+  function seekFraction(frac) {
+    if (total <= 1) return;
+    goTo(Math.round(frac * (total - 1)), false);
+  }
+  // Stored before a chapter loads, applied on the following relayout.
+  function setPendingFraction(frac) { pendingFraction = frac; }
 
   function report() {
     if (window.FolioBridge) window.FolioBridge.onState(page, total);
@@ -115,13 +148,73 @@
 
   window.addEventListener('resize', relayout);
 
-  document.getElementById('stage').addEventListener('click', function (e) {
+  // ---- gesture handling: swipe-to-turn (page follows finger) + taps ----
+  var dragging = false, startX = 0, startY = 0, lastX = 0, baseX = 0, moved = false, axisLocked = '';
+  var stage = document.getElementById('stage');
+  var edge = document.getElementById('edge');
+
+  function showEdge(x, vis) {
+    edge.style.left = (x < stageWidth() / 2) ? '0px' : (stageWidth() - 24) + 'px';
+    edge.style.transform = (x < stageWidth() / 2) ? 'scaleX(-1)' : 'none';
+    edge.style.opacity = vis ? '1' : '0';
+  }
+
+  stage.addEventListener('touchstart', function (e) {
+    if (mode !== 'paged') return;
+    var t = e.touches[0];
+    dragging = true; moved = false; axisLocked = '';
+    startX = lastX = t.clientX; startY = t.clientY;
+    baseX = -page * stageWidth();
+  }, { passive: true });
+
+  stage.addEventListener('touchmove', function (e) {
+    if (!dragging) return;
+    var t = e.touches[0];
+    var dx = t.clientX - startX;
+    var dy = t.clientY - startY;
+    if (axisLocked === '') {
+      if (Math.abs(dx) > 8 || Math.abs(dy) > 8) axisLocked = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+    }
+    if (axisLocked !== 'x') return;
+    moved = true;
+    lastX = t.clientX;
+    // resist past the first/last page
+    var atStart = page === 0 && dx > 0;
+    var atEnd = page === total - 1 && dx < 0;
+    var eff = (atStart || atEnd) ? dx * 0.35 : dx;
+    setTransform(baseX + eff, false);
+    showEdge(t.clientX, true);
+  }, { passive: true });
+
+  stage.addEventListener('touchend', function (e) {
+    if (!dragging) return;
+    dragging = false;
+    edge.style.opacity = '0';
+    var dx = lastX - startX;
+    if (axisLocked === 'x' && moved) {
+      var threshold = stageWidth() * 0.18;
+      if (dx <= -threshold) { if (!next()) { if (window.FolioBridge) window.FolioBridge.onNextChapter(); } }
+      else if (dx >= threshold) { if (!prev()) { if (window.FolioBridge) window.FolioBridge.onPrevChapter(); } }
+      else { goTo(page, true); } // snap back
+      return;
+    }
+    // treat as a tap
+    handleTap(lastX);
+  }, { passive: true });
+
+  function handleTap(x) {
     if (mode !== 'paged') { if (window.FolioBridge) window.FolioBridge.onTapMiddle(); return; }
-    var w = window.innerWidth;
-    var x = e.clientX;
-    if (x < w * 0.3) { if (!prev() && window.FolioBridge) window.FolioBridge.onPrevChapter(); }
-    else if (x > w * 0.7) { if (!next() && window.FolioBridge) window.FolioBridge.onNextChapter(); }
+    var w = stageWidth();
+    var tapEnabled = prefs.tap !== false;
+    if (tapEnabled && x < w * 0.28) { if (!prev() && window.FolioBridge) window.FolioBridge.onPrevChapter(); }
+    else if (tapEnabled && x > w * 0.72) { if (!next() && window.FolioBridge) window.FolioBridge.onNextChapter(); }
     else { if (window.FolioBridge) window.FolioBridge.onTapMiddle(); }
+  }
+
+  // Fallback for environments that fire click without touch (rare on device).
+  stage.addEventListener('click', function (e) {
+    if (moved) { moved = false; return; }
+    if (mode !== 'paged') { if (window.FolioBridge) window.FolioBridge.onTapMiddle(); return; }
   });
 </script>
 </body>
