@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover">
+<style>
+  html, body { margin:0; padding:0; height:100%; width:100%; overflow:hidden; background:transparent; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  #stage { position:fixed; inset:0; overflow:hidden; }
+  #shifter { position:absolute; inset:0; will-change:transform; }
+  #content {
+    position:absolute; inset:0; height:100%;
+    column-fill:auto; -webkit-column-fill:auto; overflow:hidden;
+  }
+  #content p { margin:0 0 1em 0; }
+  #content h1, #content h2, #content h3 { margin:0 0 .6em 0; line-height:1.2; }
+  #content img { max-width:100%; }
+  #scrollContent {
+    position:absolute; inset:0; overflow-y:auto; -webkit-overflow-scrolling:touch;
+  }
+  #scrollContent p { margin:0 0 1em 0; }
+  .warm-veil, .dim-veil { position:absolute; inset:0; pointer-events:none; transition:opacity .2s; }
+  .warm-veil { background:#c98a2e; mix-blend-mode:multiply; opacity:0; z-index:5; }
+  .dim-veil { background:#000; opacity:0; z-index:6; }
+</style>
+</head>
+<body>
+  <div id="stage">
+    <div id="shifter"><div id="content"></div></div>
+    <div id="scrollContent" style="display:none"></div>
+    <div class="warm-veil" id="warmVeil"></div>
+    <div class="dim-veil" id="dimVeil"></div>
+  </div>
+<script>
+  var prefs = {};
+  var page = 0, total = 1;
+  var mode = 'paged';
+
+  function applyPrefs(json) {
+    prefs = JSON.parse(json);
+    document.body.style.background = prefs.bg;
+    document.body.style.color = prefs.fg;
+    var c = document.getElementById('content');
+    var sc = document.getElementById('scrollContent');
+    [c, sc].forEach(function (el) {
+      el.style.fontFamily = prefs.font;
+      el.style.fontSize = prefs.size + 'px';
+      el.style.lineHeight = prefs.lh;
+      el.style.fontWeight = prefs.weight;
+      el.style.textAlign = prefs.align;
+      el.style.padding = '88px ' + prefs.mx + 'px 84px ' + prefs.mx + 'px';
+      el.style.color = prefs.fg;
+    });
+    mode = prefs.scroll ? 'scroll' : 'paged';
+    c.style.display = prefs.scroll ? 'none' : 'block';
+    sc.style.display = prefs.scroll ? 'block' : 'none';
+    document.getElementById('warmVeil').style.opacity = (prefs.warmth || 0) * 0.22;
+    document.getElementById('dimVeil').style.opacity = (1 - (prefs.brightness == null ? 1 : prefs.brightness)) * 0.85;
+    relayout();
+  }
+
+  function setHtml(html) {
+    document.getElementById('content').innerHTML = html;
+    document.getElementById('scrollContent').innerHTML = html;
+    document.getElementById('scrollContent').scrollTop = 0;
+    page = 0;
+    relayout();
+  }
+
+  function relayout() {
+    var stageW = document.getElementById('stage').offsetWidth || window.innerWidth;
+    var mx = prefs.mx || 30;
+    var c = document.getElementById('content');
+    c.style.columnWidth = Math.max(40, stageW - 2 * mx) + 'px';
+    c.style.columnGap = (2 * mx) + 'px';
+    c.style.width = stageW + 'px';
+    total = Math.max(1, Math.round(c.scrollWidth / stageW));
+    page = Math.min(page, total - 1);
+    goTo(page, false);
+  }
+
+  function goTo(p, animate) {
+    p = Math.max(0, Math.min(total - 1, p));
+    page = p;
+    var sh = document.getElementById('shifter');
+    var c = document.getElementById('content');
+    var stageW = document.getElementById('stage').offsetWidth || window.innerWidth;
+    var dur = prefs.flip === 'curl' ? 560 : 420;
+    sh.style.transition = (animate && prefs.flip !== 'none') ? ('transform ' + dur + 'ms cubic-bezier(.3,.85,.25,1)') : 'none';
+    if (animate && prefs.flip === 'fade') {
+      sh.style.transition = 'none';
+      sh.style.transform = 'translateX(' + (-p * stageW) + 'px)';
+      if (c.animate) c.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 380 });
+    } else {
+      sh.style.transform = 'translateX(' + (-p * stageW) + 'px)';
+    }
+    report();
+  }
+
+  function next() { if (page < total - 1) { goTo(page + 1, true); return true; } return false; }
+  function prev() { if (page > 0) { goTo(page - 1, true); return true; } return false; }
+  function jumpToStart() { goTo(0, false); }
+  function jumpToEnd() { goTo(total - 1, false); }
+  function setPage(p) { goTo(p, false); }
+
+  function report() {
+    if (window.FolioBridge) window.FolioBridge.onState(page, total);
+  }
+
+  document.getElementById('scrollContent').addEventListener('scroll', function (e) {
+    var el = e.target;
+    var pct = el.scrollTop / Math.max(1, el.scrollHeight - el.clientHeight);
+    if (window.FolioBridge) window.FolioBridge.onScroll(pct);
+  });
+
+  window.addEventListener('resize', relayout);
+
+  document.getElementById('stage').addEventListener('click', function (e) {
+    if (mode !== 'paged') { if (window.FolioBridge) window.FolioBridge.onTapMiddle(); return; }
+    var w = window.innerWidth;
+    var x = e.clientX;
+    if (x < w * 0.3) { if (!prev() && window.FolioBridge) window.FolioBridge.onPrevChapter(); }
+    else if (x > w * 0.7) { if (!next() && window.FolioBridge) window.FolioBridge.onNextChapter(); }
+    else { if (window.FolioBridge) window.FolioBridge.onTapMiddle(); }
+  });
+</script>
+</body>
+</html>
