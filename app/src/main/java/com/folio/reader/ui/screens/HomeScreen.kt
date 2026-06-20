@@ -14,7 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.weight
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -186,7 +186,7 @@ private fun SectionTitle(title: String, action: String? = null, onAction: (() ->
 }
 
 @Composable
-private fun MiniStat(icon: androidx.compose.ui.graphics.vector.ImageVector, value: String, label: String) {
+private fun RowScope.MiniStat(icon: androidx.compose.ui.graphics.vector.ImageVector, value: String, label: String) {
     Column(
         Modifier.weight(1f).padding(14.dp, 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
