@@ -52,7 +52,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             FolioTheme {
-                FolioApp()
+                FolioAppRoot()
             }
         }
     }
@@ -60,7 +60,7 @@ class MainActivity : ComponentActivity() {
 
 @androidx.compose.material3.ExperimentalMaterial3Api
 @Composable
-fun FolioApp() {
+fun FolioAppRoot() {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
