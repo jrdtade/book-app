@@ -27,13 +27,13 @@ data class BookRecommendation(
  *  Asks for a strict JSON response so no free-text parsing is needed. */
 object GeminiApi {
     private const val TAG = "GeminiApi"
-    private const val MODEL = "gemini-2.0-flash"
+    private const val MODEL = "gemini-1.5-flash"
     private const val ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/$MODEL:generateContent"
 
     suspend fun classify(title: String, author: String): BookClassification? = withContext(Dispatchers.IO) {
         val apiKey = BuildConfig.GEMINI_API_KEY
         if (apiKey.isBlank()) {
-            Log.w(TAG, "GEMINI_API_KEY is blank in local.properties; skipping classification")
+            Log.e(TAG, "GEMINI_API_KEY is blank! Check local.properties and rebuild.")
             return@withContext null
         }
 
@@ -64,17 +64,28 @@ object GeminiApi {
             ?.optJSONArray("parts")
             ?.optJSONObject(0)
             ?.optString("text", "")
+            ?.trim()
+            ?.removeSurrounding("```json", "```")
+            ?.trim()
             ?.takeIf { it.isNotBlank() } ?: return@withContext null
 
         runCatching {
             val parsed = JSONObject(text)
-            val genre = parsed.optString("genre", "").takeIf { it.isNotBlank() } ?: return@runCatching null
+            val genre = parsed.optString("genre", "").takeIf { it.isNotBlank() && !it.equals("null", ignoreCase = true) }
             val tagsArray = parsed.optJSONArray("tags") ?: JSONArray()
             val tags = (0 until tagsArray.length()).mapNotNull { i -> tagsArray.optString(i, "").takeIf { it.isNotBlank() } }
-            val synopsis = parsed.optString("synopsis", "").takeIf { it.isNotBlank() }
+            val synopsis = parsed.optString("synopsis", "").takeIf { it.isNotBlank() && !it.equals("null", ignoreCase = true) }
             val publishedDate = parsed.optString("publishedDate", "").takeIf { it.isNotBlank() && !it.equals("null", ignoreCase = true) }
-            BookClassification(genre, tags, synopsis, publishedDate)
-        }.getOrNull()
+            
+            if (genre == null && synopsis == null && publishedDate == null) return@runCatching null
+            
+            BookClassification(
+                genre = genre ?: "Unknown",
+                tags = tags,
+                synopsis = synopsis,
+                publishedDate = publishedDate
+            )
+        }.onFailure { Log.e(TAG, "Failed to parse Gemini classification JSON: $text", it) }.getOrNull()
     }
 
     suspend fun recommend(books: List<com.folio.reader.data.Book>, sessions: List<com.folio.reader.data.ReadingSession>): BookRecommendation? = withContext(Dispatchers.IO) {
@@ -129,7 +140,10 @@ object GeminiApi {
             ?.optJSONObject("content")
             ?.optJSONArray("parts")
             ?.optJSONObject(0)
-            ?.optString("text", "") ?: return@withContext null
+            ?.optString("text", "")
+            ?.trim()
+            ?.removeSurrounding("```json", "```")
+            ?.trim() ?: return@withContext null
 
         runCatching {
             val parsed = JSONObject(text)
@@ -137,7 +151,7 @@ object GeminiApi {
                 bookId = parsed.getString("bookId"),
                 reason = parsed.getString("reason")
             )
-        }.getOrNull()
+        }.onFailure { Log.e(TAG, "Failed to parse Gemini recommendation JSON: $text", it) }.getOrNull()
     }
 
     private fun httpPost(url: String, body: JSONObject): JSONObject? {

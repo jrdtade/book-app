@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -73,6 +74,7 @@ fun HomeScreen(
     val reading = books.filter { it.status == ReadStatus.READING }
     val finished = books.filter { it.status == ReadStatus.FINISHED }.take(6)
     val recommendation by vm.recommendation.collectAsState()
+    val isRecommending by vm.isRecommending.collectAsState()
     val today = androidx.compose.runtime.remember { SimpleDateFormat("EEE d MMM", Locale.US).format(Date()) }
 
     LaunchedEffect(books.isNotEmpty()) {
@@ -105,16 +107,32 @@ fun HomeScreen(
             }
         }
 
-        recommendation?.let { rec ->
-            val recBook = books.find { it.id == rec.bookId }
-            if (recBook != null) {
-                item {
-                    RecommendationCard(
-                        recBook,
-                        rec.reason,
-                        onClick = { openBook(recBook.id) },
-                        onRefresh = { vm.refreshRecommendation() }
-                    )
+        if (isRecommending) {
+            item {
+                Card(
+                    modifier = Modifier.padding(20.dp, 8.dp).fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
+                ) {
+                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                        Spacer(Modifier.width(16.dp))
+                        Text("Analyzing your library for recommendations...", style = MaterialTheme.typography.bodyMedium, color = Ink2)
+                    }
+                }
+            }
+        } else {
+            recommendation?.let { rec ->
+                val recBook = books.find { it.id == rec.bookId }
+                if (recBook != null) {
+                    item {
+                        RecommendationCard(
+                            recBook,
+                            rec.reason,
+                            onClick = { openBook(recBook.id) },
+                            onRefresh = { vm.refreshRecommendation() }
+                        )
+                    }
                 }
             }
         }

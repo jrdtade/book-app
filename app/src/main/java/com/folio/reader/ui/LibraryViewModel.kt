@@ -31,9 +31,15 @@ class LibraryViewModel(private val app: FolioApp) : ViewModel() {
     private val _recommendation = MutableStateFlow<BookRecommendation?>(null)
     val recommendation: StateFlow<BookRecommendation?> = _recommendation.asStateFlow()
 
+    private val _isRecommending = MutableStateFlow(false)
+    val isRecommending: StateFlow<Boolean> = _isRecommending.asStateFlow()
+
     fun refreshRecommendation() {
+        if (_isRecommending.value) return
         viewModelScope.launch {
+            _isRecommending.value = true
             _recommendation.value = repo.getRecommendation(books.value, sessions.value)
+            _isRecommending.value = false
         }
     }
 
@@ -58,11 +64,6 @@ class LibraryViewModel(private val app: FolioApp) : ViewModel() {
 
     fun deleteBook(book: Book) {
         viewModelScope.launch { repo.deleteBook(book) }
-    }
-
-    fun fetchSynopsis(book: Book) {
-        if (book.synopsis != null) return
-        viewModelScope.launch { runCatching { repo.fetchSynopsis(book) } }
     }
 
     private val _coverResults = MutableStateFlow<List<CoverCandidate>>(emptyList())

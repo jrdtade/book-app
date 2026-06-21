@@ -71,33 +71,21 @@ class BookRepository(private val context: Context) {
     suspend fun addBookmark(bookmark: Bookmark) = bookmarkDao.insert(bookmark)
     suspend fun deleteBookmark(bookmark: Bookmark) = bookmarkDao.delete(bookmark)
 
-    suspend fun fetchSynopsis(book: Book) {
-        val (olSynopsis, olDate) = OpenLibraryApi.fetchMetadata(book.title, book.author)
-        val geminiSynopsis = if (olSynopsis == null) GeminiApi.classify(book.title, book.author)?.synopsis else null
-        val synopsis = olSynopsis ?: geminiSynopsis ?: book.synopsis
-        bookDao.update(
-            book.copy(
-                synopsis = synopsis,
-                synopsisFetchFailed = synopsis == null,
-                publishedDate = olDate ?: book.publishedDate,
-            ),
-        )
-    }
-
     suspend fun classifyBook(book: Book) {
-        val classification = GeminiApi.classify(book.title, book.author)
-        val (olSynopsis, olDate) = OpenLibraryApi.fetchMetadata(book.title, book.author)
-        val synopsis = classification?.synopsis ?: olSynopsis ?: book.synopsis
-        bookDao.update(
-            book.copy(
-                genre = classification?.genre ?: book.genre,
-                tags = classification?.tags?.joinToString(",") ?: book.tags,
-                synopsis = synopsis,
-                synopsisFetchFailed = synopsis == null,
-                publishedDate = classification?.publishedDate ?: olDate ?: book.publishedDate,
-                classificationFetchFailed = classification == null,
-            ),
-        )
+        try {
+            val classification = GeminiApi.classify(book.title, book.author)
+            bookDao.update(
+                book.copy(
+                    genre = classification?.genre ?: book.genre,
+                    tags = classification?.tags?.joinToString(",") ?: book.tags,
+                    publishedDate = classification?.publishedDate ?: book.publishedDate,
+                    classificationFetchFailed = classification == null,
+                ),
+            )
+        } catch (e: Exception) {
+            android.util.Log.e("BookRepository", "classifyBook failed", e)
+            bookDao.update(book.copy(classificationFetchFailed = true))
+        }
     }
 
     suspend fun getRecommendation(books: List<Book>, sessions: List<ReadingSession>): BookRecommendation? {

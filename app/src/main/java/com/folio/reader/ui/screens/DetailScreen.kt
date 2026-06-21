@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -25,7 +26,6 @@ import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -35,7 +35,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -60,20 +59,9 @@ import com.folio.reader.ui.theme.Paper3
 fun DetailScreen(bookId: String, back: () -> Unit, openReader: () -> Unit, openCoverPicker: () -> Unit = {}) {
     val vm: LibraryViewModel = folioViewModel()
     val books by vm.books.collectAsState()
-    var fetchingSynopsis by remember { mutableStateOf(false) }
     val book = books.firstOrNull { it.id == bookId } ?: run {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Book not found") }
         return
-    }
-    LaunchedEffect(book.synopsis, book.synopsisFetchFailed) {
-        if (book.synopsis != null || book.synopsisFetchFailed) fetchingSynopsis = false
-    }
-
-    LaunchedEffect(book.id) {
-        if (book.synopsis == null && !book.synopsisFetchFailed) {
-            fetchingSynopsis = true
-            vm.fetchSynopsis(book)
-        }
     }
 
     var showShelfDialog by remember { mutableStateOf(false) }
@@ -120,8 +108,28 @@ fun DetailScreen(bookId: String, back: () -> Unit, openReader: () -> Unit, openC
                 Spacer(Modifier.height(5.dp))
                 Text(book.author, color = Ink2)
                 Spacer(Modifier.height(14.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).wrapContentWidth(Alignment.CenterHorizontally),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Meta("${book.chapterCount} chapters")
+                    if (book.genre != null && book.genre != "Unknown") {
+                        Meta(book.genre!!)
+                    }
+                }
+                if (!book.tags.isNullOrBlank()) {
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).wrapContentWidth(Alignment.CenterHorizontally),
+                    ) {
+                        book.tags!!.split(",").take(3).forEach { tag ->
+                            Box(Modifier.background(Paper3.copy(alpha = 0.5f), RoundedCornerShape(6.dp)).padding(8.dp, 3.dp)) {
+                                Text(tag, style = MaterialTheme.typography.labelSmall, color = Ink3)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -177,33 +185,6 @@ fun DetailScreen(bookId: String, back: () -> Unit, openReader: () -> Unit, openC
                             Spacer(Modifier.height(10.dp))
                             OutlinedButton(onClick = { vm.setStatus(book, ReadStatus.READING) }, modifier = Modifier.fillMaxWidth()) {
                                 Text("Mark as reading")
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        item {
-            Column(Modifier.padding(24.dp, 18.dp, 24.dp, 6.dp)) {
-                Text("DESCRIPTION", color = Ink3, style = MaterialTheme.typography.labelMedium)
-                Spacer(Modifier.height(8.dp))
-                Card(shape = RoundedCornerShape(16.dp)) {
-                    Column(Modifier.padding(16.dp)) {
-                        when {
-                            book.synopsis != null -> Text(book.synopsis!!, style = MaterialTheme.typography.bodyMedium)
-                            fetchingSynopsis -> Row(verticalAlignment = Alignment.CenterVertically) {
-                                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                                Spacer(Modifier.width(10.dp))
-                                Text("Looking up a synopsis…", color = Ink3)
-                            }
-                            else -> Column {
-                                Text("No synopsis found online.", color = Ink3, style = MaterialTheme.typography.bodyMedium)
-                                Spacer(Modifier.height(10.dp))
-                                OutlinedButton(
-                                    onClick = { fetchingSynopsis = true; vm.fetchSynopsis(book) },
-                                    modifier = Modifier.fillMaxWidth(),
-                                ) { Text("Try again") }
                             }
                         }
                     }

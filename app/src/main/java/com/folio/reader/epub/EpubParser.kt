@@ -121,6 +121,7 @@ object EpubParser {
         val manifest = mutableMapOf<String, String>() // id -> href
         val manifestProps = mutableMapOf<String, String>() // id -> properties
         val spineIds = mutableListOf<String>()
+        val linearFlags = mutableMapOf<String, Boolean>() // idref -> linear
         var coverManifestId: String? = null
 
         var event = parser.eventType
@@ -148,7 +149,12 @@ object EpubParser {
                             }
                         }
                         "itemref" -> {
-                            parser.getAttributeValue(null, "idref")?.let { spineIds.add(it) }
+                            val idref = parser.getAttributeValue(null, "idref")
+                            val linear = parser.getAttributeValue(null, "linear")
+                            if (idref != null) {
+                                spineIds.add(idref)
+                                linearFlags[idref] = linear != "no"
+                            }
                         }
                     }
                 }
@@ -169,10 +175,19 @@ object EpubParser {
             ?: manifestProps.entries.firstOrNull { it.value.contains("cover-image") }?.key
         val coverHref = coverId?.let { manifest[it] }
 
+        // Filter spine: exclude items marked non-linear, and try to exclude the cover if it's explicitly marked.
+        val filteredSpineIds = spineIds.filter { id ->
+            val isLinear = linearFlags[id] ?: true
+            val props = manifestProps[id] ?: ""
+            val isCover = id == coverId || props.contains("cover")
+            val isNav = props.contains("nav")
+            isLinear && !isCover && !isNav
+        }.ifEmpty { spineIds } // Fallback to full spine if we filtered everything out
+
         return OpfResult(
             title = title,
             author = author,
-            spineHrefs = spineIds.mapNotNull { manifest[it] },
+            spineHrefs = filteredSpineIds.mapNotNull { manifest[it] },
             coverHref = coverHref,
         )
     }
