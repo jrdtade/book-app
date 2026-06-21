@@ -13,7 +13,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.graphicsLayer
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
@@ -195,11 +196,8 @@ fun FolioAppRoot(
                     Box(
                         Modifier
                             .fillMaxSize()
-                            .graphicsLayer(
-                                alpha = 1f - (absOffset * 0.5f),
-                                scaleX = scale,
-                                scaleY = scale,
-                            ),
+                            .alpha(1f - (absOffset * 0.5f))
+                            .scale(scale),
                     ) {
                         when (tabs[page]) {
                             Tab.Reading -> HomeScreen(
