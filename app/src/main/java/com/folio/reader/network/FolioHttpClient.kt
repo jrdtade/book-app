@@ -1,6 +1,7 @@
 package com.folio.reader.network
 
 import android.content.Context
+import com.folio.reader.network.auth.BypassInterceptor
 import com.folio.reader.network.cookies.AndroidCookieJar
 import com.folio.reader.network.cookies.PersistentCookieStore
 import okhttp3.OkHttpClient
@@ -23,6 +24,7 @@ object FolioHttpClient {
         OkHttpClient.Builder()
             .cookieJar(AndroidCookieJar(PersistentCookieStore(context.applicationContext)))
             .addInterceptor(UserAgentInterceptor())
+            .addInterceptor(BypassInterceptor(context))
             .addInterceptor(AuthInterceptor(authProvidersByHost))
             .addInterceptor(RetryInterceptor())
             .connectTimeout(15, TimeUnit.SECONDS)

@@ -9,7 +9,9 @@ import com.folio.reader.network.BookRecommendation
 import com.folio.reader.network.CoverCandidate
 import com.folio.reader.network.GeminiApi
 import com.folio.reader.network.OpenLibraryApi
+import com.folio.reader.extension.ExtensionManager
 import com.folio.reader.source.SourceRegistry
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
@@ -18,14 +20,18 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.util.UUID
 
-class BookRepository(private val context: Context) {
+class BookRepository(
+    private val context: Context,
+    private val extensionManager: ExtensionManager,
+    private val scope: CoroutineScope
+) {
     private val db = FolioDatabase.get(context)
     val bookDao = db.bookDao()
     val highlightDao = db.highlightDao()
     val bookmarkDao = db.bookmarkDao()
     val sessionDao = db.sessionDao()
     val collectionDao = db.collectionDao()
-    val sourceRegistry = SourceRegistry(bookDao)
+    val sourceRegistry = SourceRegistry(bookDao, extensionManager, scope)
 
     fun observeBooks(): Flow<List<Book>> = bookDao.observeAll()
     fun observeBooksByType(mediaType: MediaType): Flow<List<Book>> = bookDao.observeByType(mediaType)

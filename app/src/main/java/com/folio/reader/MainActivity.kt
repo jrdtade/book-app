@@ -54,17 +54,22 @@ import com.folio.reader.ui.screens.LibraryScreen
 import com.folio.reader.ui.screens.OnboardingScreen
 import com.folio.reader.ui.screens.ReaderScreen
 import com.folio.reader.ui.screens.SettingsScreen
+import com.folio.reader.ui.screens.BrowseScreen
+import com.folio.reader.ui.screens.SourceBrowseScreen
 import com.folio.reader.ui.screens.StatsScreen
 import com.folio.reader.ui.theme.FolioTheme
+import androidx.compose.material.icons.filled.Explore
+import androidx.compose.ui.platform.LocalContext
 
 sealed class Tab(val route: String, val label: String) {
     data object Reading : Tab("home", "Home")
     data object Library : Tab("library", "Library")
+    data object Browse : Tab("browse", "Browse")
     data object Stats : Tab("stats", "Stats")
     data object Settings : Tab("settings", "Settings")
 }
 
-private val tabs = listOf(Tab.Reading, Tab.Library, Tab.Stats)
+private val tabs = listOf(Tab.Reading, Tab.Library, Tab.Browse, Tab.Stats)
 private const val TABS_ROUTE = "tabs"
 
 class MainActivity : ComponentActivity() {
@@ -122,6 +127,9 @@ fun FolioAppRoot(
     val libraryViewModel: LibraryViewModel = folioViewModel()
     val pagerState = rememberPagerState(pageCount = { tabs.size })
     val scope = rememberCoroutineScope()
+    val app = LocalContext.current.applicationContext as FolioApp
+    val extensionManager = app.extensionManager
+    val sources by app.repository.sourceRegistry.sources.collectAsState()
 
     fun navigateToTab(route: String) {
         if (tabs.any { it.route == route }) {
@@ -168,6 +176,7 @@ fun FolioAppRoot(
                                     when (tab) {
                                         Tab.Reading -> Icons.Filled.Home
                                         Tab.Library -> Icons.Outlined.LibraryBooks
+                                        Tab.Browse -> Icons.Filled.Explore
                                         Tab.Stats -> Icons.Filled.Equalizer
                                         else -> Icons.Filled.Home
                                     },
@@ -209,6 +218,11 @@ fun FolioAppRoot(
                                 openProfile = { navigateToTab(Tab.Settings.route) },
                             )
                             Tab.Library -> LibraryScreen(openBook = { id -> navController.navigate("detail/$id") })
+                            Tab.Browse -> BrowseScreen(
+                                extensionManager = extensionManager,
+                                sources = sources,
+                                onSourceClick = { source -> navController.navigate("source_browse/${source.id}") }
+                            )
                             Tab.Stats -> StatsScreen()
                             else -> Unit
                         }
@@ -247,6 +261,18 @@ fun FolioAppRoot(
                 } else {
                     ReaderScreen(bookId = id, back = { navController.popBackStack() })
                 }
+            }
+            composable(
+                "source_browse/{sourceId}",
+                arguments = listOf(navArgument("sourceId") { type = NavType.StringType }),
+            ) { entry ->
+                val id = entry.arguments?.getString("sourceId") ?: return@composable
+                val source = app.repository.sourceRegistry.byId(id) ?: return@composable
+                SourceBrowseScreen(
+                    source = source,
+                    back = { navController.popBackStack() },
+                    onMediaClick = { /* TODO: Open media detail from source */ }
+                )
             }
         }
     }

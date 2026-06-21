@@ -44,5 +44,11 @@
                 <data android:mimeType="application/epub+zip" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".network.auth.AuthWebViewActivity"
+            android:theme="@style/Theme.Folio"
+            android:configChanges="orientation|screenSize" />
+
     </application>
 </manifest>

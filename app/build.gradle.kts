@@ -4,6 +4,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.kapt")
+    id("org.jetbrains.kotlin.plugin.serialization") version "1.9.24"
 }
 
 val localProperties = Properties().apply {
@@ -79,6 +80,7 @@ dependencies {
     implementation("androidx.webkit:webkit:1.11.0")
     implementation("io.coil-kt:coil-compose:2.6.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
     // Pure-Java unrar implementation, used to read .cbr comic archives.
     implementation("com.github.junrar:junrar:7.5.5")
 
