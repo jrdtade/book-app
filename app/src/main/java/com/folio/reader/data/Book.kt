@@ -8,6 +8,12 @@ enum class ReadStatus { WANT, READING, FINISHED }
 /** Source id for books imported via the local EPUB file parser (as opposed to an extension/source). */
 const val LOCAL_EPUB_SOURCE_ID = "local_epub"
 
+/** Source ids for comic/manga archives imported via the local CBZ/CBR file parser. */
+const val LOCAL_COMIC_SOURCE_ID = "local_comic"
+const val LOCAL_MANGA_SOURCE_ID = "local_manga"
+
+enum class ReadingMode { PAGED_LTR, PAGED_RTL, WEBTOON }
+
 @Entity(tableName = "books")
 data class Book(
     @PrimaryKey val id: String,
@@ -19,12 +25,14 @@ data class Book(
     /** Directory (under filesDir/books/<id>) holding the unpacked content. */
     val contentDir: String,
     val coverPath: String?,
-    /** Absolute spine order of chapter file paths, joined with '\n'. */
+    /** Absolute spine order of chapter (EPUB) or page image (comic/manga) file paths, joined with '\n'. */
     val spine: String,
     val chapterCount: Int,
     var currentChapter: Int = 0,
     /** 0f..1f progress within the current chapter (paged mode: page/total). */
     var chapterProgress: Float = 0f,
+    /** Page layout/navigation style for comic/manga readers. Unused for EPUB. */
+    var readingMode: ReadingMode = ReadingMode.PAGED_LTR,
     var status: ReadStatus = ReadStatus.WANT,
     var rating: Int = 0,
     var addedAt: Long = System.currentTimeMillis(),

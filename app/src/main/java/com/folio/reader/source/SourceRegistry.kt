@@ -8,6 +8,8 @@ import com.folio.reader.data.MediaType
 class SourceRegistry(bookDao: BookDao) {
     private val sources: List<MediaSource> = listOf(
         LocalEpubSource(bookDao),
+        CbzCbrSource(bookDao, MediaType.COMIC),
+        CbzCbrSource(bookDao, MediaType.MANGA),
         StubNetworkSource(id = "stub_manga_network", name = "Network (stub)", mediaType = MediaType.MANGA),
     )
 

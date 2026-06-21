@@ -3,6 +3,7 @@ package com.folio.reader.data
 import android.content.Context
 import android.graphics.BitmapFactory
 import android.net.Uri
+import com.folio.reader.comic.CbzCbrParser
 import com.folio.reader.epub.EpubParser
 import com.folio.reader.network.BookRecommendation
 import com.folio.reader.network.CoverCandidate
@@ -51,6 +52,28 @@ class BookRepository(private val context: Context) {
             spine = parsed.spine.joinToString("\n"),
             chapterCount = parsed.spine.size.coerceAtLeast(1),
             status = ReadStatus.WANT,
+            coverColorA = palette.first,
+            coverColorB = palette.second,
+        )
+        bookDao.upsert(book)
+        return book
+    }
+
+    suspend fun importComic(uri: Uri, displayName: String?, mediaType: MediaType): Book {
+        val parsed = CbzCbrParser.import(context, uri, displayName)
+        val palette = COVER_PALETTES[Math.abs(parsed.title.hashCode()) % COVER_PALETTES.size]
+        val book = Book(
+            id = parsed.id,
+            title = parsed.title,
+            author = "Unknown",
+            mediaType = mediaType,
+            sourceId = if (mediaType == MediaType.MANGA) LOCAL_MANGA_SOURCE_ID else LOCAL_COMIC_SOURCE_ID,
+            contentDir = parsed.contentDir.absolutePath,
+            coverPath = parsed.coverPath,
+            spine = parsed.pages.joinToString("\n"),
+            chapterCount = parsed.pages.size.coerceAtLeast(1),
+            status = ReadStatus.WANT,
+            readingMode = if (mediaType == MediaType.MANGA) ReadingMode.PAGED_RTL else ReadingMode.PAGED_LTR,
             coverColorA = palette.first,
             coverColorB = palette.second,
         )

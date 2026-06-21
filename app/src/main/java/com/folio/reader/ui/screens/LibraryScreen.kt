@@ -40,10 +40,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import android.content.Context
+import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.folio.reader.data.Book
+import com.folio.reader.data.MediaType
 import com.folio.reader.data.Shelf
 import com.folio.reader.data.ReadStatus
 import com.folio.reader.data.overallProgress
@@ -63,8 +68,16 @@ fun LibraryScreen(openBook: (String) -> Unit) {
     var selectedShelf by remember { mutableStateOf<Shelf?>(null) }
     var showNewShelfDialog by remember { mutableStateOf(false) }
     var bookToDelete by remember { mutableStateOf<Book?>(null) }
+    val context = LocalContext.current
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        uri?.let { vm.importEpub(it) }
+        uri?.let {
+            val name = queryDisplayName(context, it)
+            when (name?.substringAfterLast('.', "")?.lowercase()) {
+                // Both archive formats default to COMIC; Phase 5's library UI lets these be recategorized as Manga.
+                "cbz", "cbr" -> vm.importComic(it, name, MediaType.COMIC)
+                else -> vm.importEpub(it)
+            }
+        }
     }
 
     val genres = remember(books) { books.mapNotNull { it.genre }.distinct().sorted() }
@@ -99,8 +112,8 @@ fun LibraryScreen(openBook: (String) -> Unit) {
 
     Scaffold(
         floatingActionButton = {
-            FloatingActionButton(onClick = { launcher.launch(arrayOf("application/epub+zip")) }) {
-                Icon(Icons.Filled.Add, contentDescription = "Import EPUB")
+            FloatingActionButton(onClick = { launcher.launch(IMPORTABLE_MIME_TYPES) }) {
+                Icon(Icons.Filled.Add, contentDescription = "Import book")
             }
         },
     ) { padding ->
@@ -220,3 +233,20 @@ private fun NewShelfDialog(onDismiss: () -> Unit, onCreate: (String) -> Unit) {
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }
+
+/** CBZ/CBR have no universally registered MIME type, so cast a wide net and
+ *  disambiguate by file extension once a file is actually picked. */
+private val IMPORTABLE_MIME_TYPES = arrayOf(
+    "application/epub+zip",
+    "application/zip",
+    "application/vnd.comicbook+zip",
+    "application/vnd.comicbook-rar",
+    "application/x-rar-compressed",
+    "application/octet-stream",
+)
+
+private fun queryDisplayName(context: Context, uri: Uri): String? =
+    context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+        val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+        if (index >= 0 && cursor.moveToFirst()) cursor.getString(index) else null
+    }

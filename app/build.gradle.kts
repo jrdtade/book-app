@@ -78,6 +78,8 @@ dependencies {
 
     implementation("androidx.webkit:webkit:1.11.0")
     implementation("io.coil-kt:coil-compose:2.6.0")
+    // Pure-Java unrar implementation, used to read .cbr comic archives.
+    implementation("com.github.junrar:junrar:7.5.5")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

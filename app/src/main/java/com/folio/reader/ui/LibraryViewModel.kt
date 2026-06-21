@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.folio.reader.FolioApp
 import com.folio.reader.data.Book
+import com.folio.reader.data.MediaType
 import com.folio.reader.data.Shelf
 import com.folio.reader.data.ReadStatus
 import com.folio.reader.data.ReadingSession
@@ -51,6 +52,13 @@ class LibraryViewModel(private val app: FolioApp) : ViewModel() {
             val book = runCatching { repo.importEpub(uri) }.getOrNull()
             onComplete?.invoke()
             if (book != null) viewModelScope.launch { runCatching { repo.classifyBook(book) } }
+        }
+    }
+
+    fun importComic(uri: Uri, displayName: String?, mediaType: MediaType, onComplete: (() -> Unit)? = null) {
+        viewModelScope.launch {
+            runCatching { repo.importComic(uri, displayName, mediaType) }
+            onComplete?.invoke()
         }
     }
 

@@ -42,9 +42,11 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.navigation.NavType
+import com.folio.reader.data.MediaType
 import com.folio.reader.ui.LibraryViewModel
 import com.folio.reader.ui.UserViewModel
 import com.folio.reader.ui.folioViewModel
+import com.folio.reader.ui.screens.ComicReaderScreen
 import com.folio.reader.ui.screens.CoverPickerScreen
 import com.folio.reader.ui.screens.DetailScreen
 import com.folio.reader.ui.screens.HomeScreen
@@ -238,7 +240,13 @@ fun FolioAppRoot(
                 arguments = listOf(navArgument("bookId") { type = NavType.StringType }),
             ) { entry ->
                 val id = entry.arguments?.getString("bookId") ?: return@composable
-                ReaderScreen(bookId = id, back = { navController.popBackStack() })
+                val books by libraryViewModel.books.collectAsState()
+                val mediaType = books.firstOrNull { it.id == id }?.mediaType
+                if (mediaType == MediaType.MANGA || mediaType == MediaType.COMIC) {
+                    ComicReaderScreen(bookId = id, back = { navController.popBackStack() })
+                } else {
+                    ReaderScreen(bookId = id, back = { navController.popBackStack() })
+                }
             }
         }
     }
