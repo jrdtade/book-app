@@ -8,6 +8,7 @@ import com.folio.reader.network.BookRecommendation
 import com.folio.reader.network.CoverCandidate
 import com.folio.reader.network.GeminiApi
 import com.folio.reader.network.OpenLibraryApi
+import com.folio.reader.source.SourceRegistry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
@@ -23,6 +24,7 @@ class BookRepository(private val context: Context) {
     val bookmarkDao = db.bookmarkDao()
     val sessionDao = db.sessionDao()
     val collectionDao = db.collectionDao()
+    val sourceRegistry = SourceRegistry(bookDao)
 
     fun observeBooks(): Flow<List<Book>> = bookDao.observeAll()
     fun observeBooksByType(mediaType: MediaType): Flow<List<Book>> = bookDao.observeByType(mediaType)
