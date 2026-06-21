@@ -68,6 +68,7 @@ class MainActivity : ComponentActivity() {
     var pendingImportUri by mutableStateOf<Uri?>(null)
 
     @androidx.compose.material3.ExperimentalMaterial3Api
+    @androidx.compose.foundation.ExperimentalFoundationApi
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -98,6 +99,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @androidx.compose.material3.ExperimentalMaterial3Api
+@androidx.compose.foundation.ExperimentalFoundationApi
 @Composable
 fun FolioAppRoot(
     pendingImportUri: Uri? = null,
