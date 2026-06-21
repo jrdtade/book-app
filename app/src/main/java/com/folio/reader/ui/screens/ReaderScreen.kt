@@ -460,7 +460,7 @@ private fun ReaderMenuSheet(
             }
             ChromePill("Contents · ${(pct * 100).toInt()}%", Icons.AutoMirrored.Filled.List, onContents)
             ChromePill("Search Book", Icons.Filled.Search, onSearch)
-            ChromePill("Bookmarks", BookmarkIcon, onBookmarks)
+            ChromePill("Bookmarks", Icons.Filled.BookmarkIcon, onBookmarks)
             ChromePill("Highlights & Notes", Icons.Filled.BorderColor, onHighlights)
             ChromePill("Themes & Settings", Icons.Filled.TextFields, onThemes)
             TextButton(onClick = onAddBookmark, modifier = Modifier.fillMaxWidth()) { Text("Bookmark this page") }

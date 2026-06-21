@@ -71,7 +71,7 @@ fun CoverPickerScreen(bookId: String, back: () -> Unit) {
                     Image(
                         painter = rememberAsyncImagePainter(candidate.thumbnailUrl),
                         contentDescription = candidate.title,
-                        contentScale = ContentScale.Cover,
+                        contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .fillMaxWidth()
                             .aspectRatio(0.68f)
