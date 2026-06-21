@@ -46,7 +46,6 @@ import com.folio.reader.data.Shelf
 import com.folio.reader.data.ReadStatus
 import com.folio.reader.data.overallProgress
 import com.folio.reader.ui.components.Cover
-import com.folio.reader.ui.components.ProgressRing
 import com.folio.reader.ui.folioViewModel
 import com.folio.reader.ui.theme.Ink3
 
@@ -141,19 +140,22 @@ private fun LibraryGridItem(book: Book, onClick: () -> Unit) {
     Column {
         Box {
             Cover(book, width = 154.dp, onClick = onClick)
-            when (book.status) {
-                ReadStatus.READING -> Box(Modifier.align(Alignment.BottomEnd).padding(8.dp)) {
-                    ProgressRing(pct = book.overallProgress(), size = 32.dp, strokeWidth = 4.dp)
-                }
-                ReadStatus.FINISHED -> Box(Modifier.align(Alignment.BottomEnd).padding(8.dp)) {
+            if (book.status == ReadStatus.FINISHED) {
+                Box(Modifier.align(Alignment.BottomEnd).padding(8.dp)) {
                     Icon(Icons.Filled.Check, contentDescription = null, tint = com.folio.reader.ui.theme.Blue, modifier = Modifier.padding(4.dp))
                 }
-                else -> Unit
             }
         }
         Spacer(Modifier.height(11.dp))
         Text(book.title, style = MaterialTheme.typography.titleMedium, maxLines = 2)
         Text(book.author, style = MaterialTheme.typography.bodySmall, color = Ink3)
+        if (book.status == ReadStatus.READING) {
+            Text(
+                "${(book.overallProgress() * 100).toInt()}%",
+                style = MaterialTheme.typography.bodySmall,
+                color = com.folio.reader.ui.theme.Blue,
+            )
+        }
     }
 }
 
