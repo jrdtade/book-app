@@ -25,14 +25,42 @@ object OpenLibraryApi {
     private const val COVERS_URL = "https://covers.openlibrary.org/b/id"
 
     suspend fun fetchMetadata(title: String, author: String): Pair<String?, String?> = withContext(Dispatchers.IO) {
-        val doc = search(title, author, limit = 1) ?: return@withContext null to null
-        val docs = doc.optJSONArray("docs")
-        if (docs == null || docs.length() == 0) return@withContext null to null
-        val first = docs.getJSONObject(0)
-        val publishedDate = first.optInt("first_publish_year", -1).takeIf { it > 0 }?.toString()
-        val workKey = first.optString("key", "").takeIf { it.isNotBlank() }
+        val doc = search(title, author, limit = 1)
+        val docs = doc?.optJSONArray("docs")
+        val first = docs?.takeIf { it.length() > 0 }?.getJSONObject(0)
+        val publishedDate = first?.optInt("first_publish_year", -1)?.takeIf { it > 0 }?.toString()
+        val workKey = first?.optString("key", "")?.takeIf { it.isNotBlank() }
         val synopsis = workKey?.let { fetchWorkDescription(it) }
+            ?: fetchGoogleBooksDescription(title, author)
+            ?: fetchWikipediaSummary(title, author)
         synopsis to publishedDate
+    }
+
+    /** Fallback when Open Library has no synopsis for the work. */
+    private fun fetchGoogleBooksDescription(title: String, author: String): String? {
+        val query = URLEncoder.encode("intitle:$title" + if (author.isNotBlank()) " inauthor:$author" else "", "UTF-8")
+        val json = httpGet("https://www.googleapis.com/books/v1/volumes?q=$query&maxResults=1") ?: return null
+        val items = json.optJSONArray("items") ?: return null
+        if (items.length() == 0) return null
+        return items.getJSONObject(0).optJSONObject("volumeInfo")?.optString("description", "")?.takeIf { it.isNotBlank() }
+    }
+
+    /** Last-resort fallback: the lead paragraph of the book's Wikipedia article, if one exists. */
+    private fun fetchWikipediaSummary(title: String, author: String): String? {
+        val searchQuery = URLEncoder.encode("$title $author book", "UTF-8")
+        val searchJson = httpGet(
+            "https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=$searchQuery&format=json&srlimit=1",
+        ) ?: return null
+        val pageTitle = searchJson.optJSONObject("query")
+            ?.optJSONArray("search")
+            ?.takeIf { it.length() > 0 }
+            ?.getJSONObject(0)
+            ?.optString("title", "")
+            ?.takeIf { it.isNotBlank() } ?: return null
+        val summaryJson = httpGet(
+            "https://en.wikipedia.org/api/rest_v1/page/summary/${URLEncoder.encode(pageTitle, "UTF-8")}",
+        ) ?: return null
+        return summaryJson.optString("extract", "").takeIf { it.isNotBlank() }
     }
 
     suspend fun searchCovers(query: String): List<CoverCandidate> = withContext(Dispatchers.IO) {

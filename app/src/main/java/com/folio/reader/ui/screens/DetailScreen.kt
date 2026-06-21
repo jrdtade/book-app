@@ -64,11 +64,16 @@ fun DetailScreen(bookId: String, back: () -> Unit, openReader: () -> Unit, openC
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Book not found") }
         return
     }
-    androidx.compose.runtime.LaunchedEffect(book.synopsis) {
-        if (book.synopsis != null) fetchingSynopsis = false
+    LaunchedEffect(book.synopsis, book.synopsisFetchFailed) {
+        if (book.synopsis != null || book.synopsisFetchFailed) fetchingSynopsis = false
     }
 
-    LaunchedEffect(book.id) { vm.fetchSynopsis(book) }
+    LaunchedEffect(book.id) {
+        if (book.synopsis == null && !book.synopsisFetchFailed) {
+            fetchingSynopsis = true
+            vm.fetchSynopsis(book)
+        }
+    }
 
     var showShelfDialog by remember { mutableStateOf(false) }
     if (showShelfDialog) {
@@ -108,22 +113,6 @@ fun DetailScreen(bookId: String, back: () -> Unit, openReader: () -> Unit, openC
 
         item {
             ShelvesRow(bookId = book.id, onManage = { showShelfDialog = true })
-        }
-
-        item {
-            Column(Modifier.padding(24.dp, 4.dp, 24.dp, 0.dp)) {
-                Text("SYNOPSIS", color = Ink3, style = MaterialTheme.typography.labelMedium)
-                Spacer(Modifier.height(8.dp))
-                when {
-                    book.synopsis != null -> Text(book.synopsis!!, style = MaterialTheme.typography.bodyMedium)
-                    book.synopsisFetchFailed -> Text("No synopsis found online.", color = Ink3, style = MaterialTheme.typography.bodyMedium)
-                    else -> Row(verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Fetching synopsis…", color = Ink3, style = MaterialTheme.typography.bodyMedium)
-                    }
-                }
-            }
         }
 
         item {
@@ -193,10 +182,14 @@ fun DetailScreen(bookId: String, back: () -> Unit, openReader: () -> Unit, openC
                                 Spacer(Modifier.width(10.dp))
                                 Text("Looking up a synopsis…", color = Ink3)
                             }
-                            else -> OutlinedButton(
-                                onClick = { fetchingSynopsis = true; vm.fetchSynopsis(book) },
-                                modifier = Modifier.fillMaxWidth(),
-                            ) { Text("Get description from the internet") }
+                            else -> Column {
+                                Text("No synopsis found online.", color = Ink3, style = MaterialTheme.typography.bodyMedium)
+                                Spacer(Modifier.height(10.dp))
+                                OutlinedButton(
+                                    onClick = { fetchingSynopsis = true; vm.fetchSynopsis(book) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) { Text("Try again") }
+                            }
                         }
                     }
                 }

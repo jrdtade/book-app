@@ -1,15 +1,19 @@
 package com.folio.reader.ui.screens
 
-import android.annotation.SuppressLint
-import android.view.ViewGroup
-import android.webkit.JavascriptInterface
-import android.webkit.WebView
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.CircularProgressIndicator
@@ -18,6 +22,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -25,15 +30,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
-import com.folio.reader.data.RemoteBookInfo
+import coil.compose.rememberAsyncImagePainter
+import com.folio.reader.network.CoverCandidate
 import com.folio.reader.ui.LibraryViewModel
 import com.folio.reader.ui.folioViewModel
+import com.folio.reader.ui.theme.Ink3
 
-/** Lets the user browse Google Images for an alternate cover and tap one to use it —
- *  the same workflow Moon Reader offers for picking custom book covers. */
-@SuppressLint("SetJavaScriptEnabled")
+/** Lets the user search Open Library's cover catalog for an alternate cover and tap one to use it. */
 @Composable
 fun CoverPickerScreen(bookId: String, back: () -> Unit) {
     val vm: LibraryViewModel = folioViewModel()
@@ -42,51 +48,42 @@ fun CoverPickerScreen(bookId: String, back: () -> Unit) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Book not found") }
         return
     }
-    var loading by remember { mutableStateOf(true) }
-    var picking by remember { mutableStateOf(false) }
+    val results by vm.coverResults.collectAsState()
+    val searching by vm.coverSearchInProgress.collectAsState()
+    var applying by remember { mutableStateOf(false) }
+
+    LaunchedEffect(book.id) { vm.searchCovers("${book.title} ${book.author}") }
 
     Box(Modifier.fillMaxSize()) {
-        AndroidView(
-            modifier = Modifier.fillMaxSize(),
-            factory = { ctx ->
-                WebView(ctx).apply {
-                    layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-                    settings.javaScriptEnabled = true
-                    settings.domStorageEnabled = true
-                    addJavascriptInterface(
-                        object {
-                            @JavascriptInterface
-                            fun onImagePicked(url: String) {
-                                picking = true
-                                vm.applyCover(book, url, onComplete = back)
-                            }
-                        },
-                        "CoverBridge",
+        if (results.isEmpty() && !searching) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("No alternate covers found", color = Ink3)
+            }
+        } else {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(3),
+                contentPadding = PaddingValues(16.dp, 88.dp, 16.dp, 24.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                items(results, key = CoverCandidate::thumbnailUrl) { candidate ->
+                    Image(
+                        painter = rememberAsyncImagePainter(candidate.thumbnailUrl),
+                        contentDescription = candidate.title,
+                        contentScale = ContentScale.Cover,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(0.68f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable {
+                                applying = true
+                                vm.applyCover(book, candidate.thumbnailUrl, onComplete = back)
+                            },
                     )
-                    webViewClient = object : android.webkit.WebViewClient() {
-                        override fun onPageFinished(view: WebView?, url: String?) {
-                            loading = false
-                            // Tapping a result thumbnail reports its image URL back to native code.
-                            view?.evaluateJavascript(
-                                """
-                                (function() {
-                                  document.querySelectorAll('img').forEach(function(img) {
-                                    img.addEventListener('click', function(e) {
-                                      e.preventDefault();
-                                      var src = img.src && img.src.indexOf('http') === 0 ? img.src : img.getAttribute('data-src');
-                                      if (src && window.CoverBridge) window.CoverBridge.onImagePicked(src);
-                                    }, true);
-                                  });
-                                })();
-                                """.trimIndent(),
-                                null,
-                            )
-                        }
-                    }
-                    loadUrl(RemoteBookInfo.coverSearchUrl(book.title, book.author))
                 }
-            },
-        )
+            }
+        }
 
         Row(
             Modifier.fillMaxWidth().padding(8.dp, 36.dp, 8.dp, 8.dp),
@@ -95,7 +92,7 @@ fun CoverPickerScreen(bookId: String, back: () -> Unit) {
             IconButton(onClick = back) { Icon(Icons.Filled.ArrowBack, contentDescription = "Back") }
         }
 
-        if (loading || picking) {
+        if (searching || applying) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
             }
