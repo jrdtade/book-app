@@ -32,6 +32,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -58,13 +60,22 @@ import com.folio.reader.ui.theme.Ink3
 
 private enum class LibFilter(val label: String) { ALL("All"), READING("Reading"), FINISHED("Finished"), WANT("Want to read") }
 
+/** Top-level Library categories, each backed by its own MediaType-filtered Room flow. */
+private enum class LibCategory(val mediaType: MediaType, val label: String) {
+    EBOOKS(MediaType.EPUB, "eBooks"),
+    MANGA(MediaType.MANGA, "Manga"),
+    COMICS(MediaType.COMIC, "Comics"),
+    LIGHT_NOVELS(MediaType.LIGHT_NOVEL, "Light Novels"),
+}
+
 @Composable
 fun LibraryScreen(openBook: (String) -> Unit) {
     val vm: com.folio.reader.ui.LibraryViewModel = folioViewModel()
-    val books by vm.books.collectAsState()
+    var category by remember { mutableStateOf(LibCategory.EBOOKS) }
+    val books by remember(category) { vm.observeByType(category.mediaType) }.collectAsState(initial = emptyList())
     val collections by vm.collections.collectAsState()
     var filter by remember { mutableStateOf(LibFilter.ALL) }
-    var selectedGenre by remember { mutableStateOf<String?>(null) }
+    var selectedGenre by remember(category) { mutableStateOf<String?>(null) }
     var selectedShelf by remember { mutableStateOf<Shelf?>(null) }
     var showNewShelfDialog by remember { mutableStateOf(false) }
     var bookToDelete by remember { mutableStateOf<Book?>(null) }
@@ -73,7 +84,7 @@ fun LibraryScreen(openBook: (String) -> Unit) {
         uri?.let {
             val name = queryDisplayName(context, it)
             when (name?.substringAfterLast('.', "")?.lowercase()) {
-                // Both archive formats default to COMIC; Phase 5's library UI lets these be recategorized as Manga.
+                // Both archive formats default to COMIC; long-press a book to recategorize it as Manga.
                 "cbz", "cbr" -> vm.importComic(it, name, MediaType.COMIC)
                 else -> vm.importEpub(it)
             }
@@ -93,7 +104,18 @@ fun LibraryScreen(openBook: (String) -> Unit) {
         AlertDialog(
             onDismissRequest = { bookToDelete = null },
             title = { Text("Remove \"${b.title}\"?") },
-            text = { Text("This removes the book and its downloaded contents from your library. This can't be undone.") },
+            text = {
+                Column {
+                    Text("This removes the book and its downloaded contents from your library. This can't be undone.")
+                    if (b.mediaType == MediaType.COMIC || b.mediaType == MediaType.MANGA) {
+                        val other = if (b.mediaType == MediaType.MANGA) MediaType.COMIC else MediaType.MANGA
+                        Spacer(Modifier.height(12.dp))
+                        TextButton(onClick = { vm.recategorize(b, other); bookToDelete = null }) {
+                            Text("Move to ${if (other == MediaType.MANGA) "Manga" else "Comics"} instead")
+                        }
+                    }
+                }
+            },
             confirmButton = {
                 TextButton(onClick = { vm.deleteBook(b); bookToDelete = null }) { Text("Remove") }
             },
@@ -119,8 +141,17 @@ fun LibraryScreen(openBook: (String) -> Unit) {
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             Column(Modifier.padding(20.dp, 28.dp, 20.dp, 12.dp)) {
-                Text("${books.size} BOOKS", color = Ink3, style = MaterialTheme.typography.labelMedium)
+                Text("${books.size} ${category.label.uppercase()}", color = Ink3, style = MaterialTheme.typography.labelMedium)
                 Text("Library", style = MaterialTheme.typography.headlineLarge)
+            }
+            TabRow(selectedTabIndex = category.ordinal) {
+                LibCategory.entries.forEach { c ->
+                    Tab(
+                        selected = category == c,
+                        onClick = { category = c },
+                        text = { Text(c.label) },
+                    )
+                }
             }
             LazyRow(
                 Modifier.fillMaxWidth(),

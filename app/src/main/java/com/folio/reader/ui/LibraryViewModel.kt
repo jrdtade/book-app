@@ -5,12 +5,16 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.folio.reader.FolioApp
 import com.folio.reader.data.Book
+import com.folio.reader.data.LOCAL_COMIC_SOURCE_ID
+import com.folio.reader.data.LOCAL_MANGA_SOURCE_ID
 import com.folio.reader.data.MediaType
+import com.folio.reader.data.ReadingMode
 import com.folio.reader.data.Shelf
 import com.folio.reader.data.ReadStatus
 import com.folio.reader.data.ReadingSession
 import com.folio.reader.network.BookRecommendation
 import com.folio.reader.network.CoverCandidate
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -25,6 +29,11 @@ class LibraryViewModel(private val app: FolioApp) : ViewModel() {
 
     val books: StateFlow<List<Book>> = repo.observeBooks()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** Books of a single category (eBooks/Manga/Comics/Light Novels), filtered at the
+     *  Room query level rather than client-side so the Library screen's tabs are each
+     *  backed by their own [com.folio.reader.data.BookDao.observeByType] flow. */
+    fun observeByType(mediaType: MediaType): Flow<List<Book>> = repo.observeBooksByType(mediaType)
 
     val sessions: StateFlow<List<ReadingSession>> = repo.observeSessions()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -72,6 +81,22 @@ class LibraryViewModel(private val app: FolioApp) : ViewModel() {
 
     fun deleteBook(book: Book) {
         viewModelScope.launch { repo.deleteBook(book) }
+    }
+
+    /** Moves a comic archive import between the Comics and Manga categories - the
+     *  importer can't tell them apart from the file alone, so this is a manual call. */
+    fun recategorize(book: Book, mediaType: MediaType) {
+        if (book.mediaType != MediaType.COMIC && book.mediaType != MediaType.MANGA) return
+        if (mediaType != MediaType.COMIC && mediaType != MediaType.MANGA) return
+        viewModelScope.launch {
+            repo.updateBook(
+                book.copy(
+                    mediaType = mediaType,
+                    sourceId = if (mediaType == MediaType.MANGA) LOCAL_MANGA_SOURCE_ID else LOCAL_COMIC_SOURCE_ID,
+                    readingMode = if (mediaType == MediaType.MANGA) ReadingMode.PAGED_RTL else ReadingMode.PAGED_LTR,
+                ),
+            )
+        }
     }
 
     private val _coverResults = MutableStateFlow<List<CoverCandidate>>(emptyList())
