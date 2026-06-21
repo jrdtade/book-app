@@ -91,8 +91,11 @@ dependencies {
     // Referenced by extensions implementing ConfigurableSource (login/settings screens).
     implementation("androidx.preference:preference-ktx:1.2.1")
     // The real DI container Tachiyomi/Mihon extensions use (`Injekt.get<NetworkHelper>()`,
-    // etc.) — we register our own bindings for it in FolioApp so those calls resolve.
-    implementation("uy.kohesive.injekt:injekt-core:1.16.1")
+    // `by injectLazy()`, etc.) — we register our own bindings for it in FolioApp so those
+    // calls resolve. This is the exact fork (and commit) the real Mihon app itself depends
+    // on (see gradle/libs.versions.toml in github.com/mihonorg/mihon) — published via
+    // JitPack, not the original uy.kohesive.injekt artifacts on Maven Central.
+    implementation("com.github.mihonapp:injekt:91edab2317")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
