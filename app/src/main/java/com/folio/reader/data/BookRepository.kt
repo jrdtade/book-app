@@ -71,12 +71,15 @@ class BookRepository(private val context: Context) {
     suspend fun deleteBookmark(bookmark: Bookmark) = bookmarkDao.delete(bookmark)
 
     suspend fun fetchSynopsis(book: Book) {
-        val (synopsis, publishedDate) = OpenLibraryApi.fetchMetadata(book.title, book.author)
+        val result = GeminiApi.classify(book.title, book.author)
         bookDao.update(
             book.copy(
-                synopsis = synopsis,
-                synopsisFetchFailed = synopsis == null,
-                publishedDate = publishedDate ?: book.publishedDate,
+                synopsis = result?.synopsis ?: book.synopsis,
+                synopsisFetchFailed = result?.synopsis == null,
+                publishedDate = result?.publishedDate ?: book.publishedDate,
+                genre = result?.genre ?: book.genre,
+                tags = result?.tags?.joinToString(",") ?: book.tags,
+                classificationFetchFailed = result == null,
             ),
         )
     }
@@ -87,6 +90,9 @@ class BookRepository(private val context: Context) {
             book.copy(
                 genre = result?.genre ?: book.genre,
                 tags = result?.tags?.joinToString(",") ?: book.tags,
+                synopsis = result?.synopsis ?: book.synopsis,
+                synopsisFetchFailed = result?.synopsis == null && book.synopsis == null,
+                publishedDate = result?.publishedDate ?: book.publishedDate,
                 classificationFetchFailed = result == null,
             ),
         )

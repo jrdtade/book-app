@@ -8,12 +8,17 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
-/** Genre + descriptive tags classified for a book by Gemini. */
-data class BookClassification(val genre: String, val tags: List<String>)
+/** Genre, descriptive tags, synopsis and publication info gathered for a book by Gemini. */
+data class BookClassification(
+    val genre: String,
+    val tags: List<String>,
+    val synopsis: String?,
+    val publishedDate: String?,
+)
 
 /** Client for the Gemini API's generateContent endpoint, used to classify a book's
- *  genre and tags from its title/author. Asks for a strict JSON response so no
- *  free-text parsing is needed. */
+ *  genre/tags and look up its synopsis and publication date from its title/author.
+ *  Asks for a strict JSON response so no free-text parsing is needed. */
 object GeminiApi {
     private const val MODEL = "gemini-2.0-flash"
     private const val ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/$MODEL:generateContent"
@@ -24,7 +29,9 @@ object GeminiApi {
 
         val prompt = "Book title: \"$title\" by $author. " +
             "Reply with ONLY a JSON object of the form " +
-            "{\"genre\": \"<a single genre label>\", \"tags\": [\"<tag1>\", \"<tag2>\", \"<tag3>\"]}. " +
+            "{\"genre\": \"<a single genre label>\", \"tags\": [\"<tag1>\", \"<tag2>\", \"<tag3>\"], " +
+            "\"synopsis\": \"<a 2-4 sentence synopsis of the book>\", " +
+            "\"publishedDate\": \"<original publication year or date, or null if unknown>\"}. " +
             "No markdown, no extra text."
 
         val requestBody = JSONObject().apply {
@@ -54,7 +61,9 @@ object GeminiApi {
             val genre = parsed.optString("genre", "").takeIf { it.isNotBlank() } ?: return@runCatching null
             val tagsArray = parsed.optJSONArray("tags") ?: JSONArray()
             val tags = (0 until tagsArray.length()).mapNotNull { i -> tagsArray.optString(i, "").takeIf { it.isNotBlank() } }
-            BookClassification(genre, tags)
+            val synopsis = parsed.optString("synopsis", "").takeIf { it.isNotBlank() }
+            val publishedDate = parsed.optString("publishedDate", "").takeIf { it.isNotBlank() && !it.equals("null", ignoreCase = true) }
+            BookClassification(genre, tags, synopsis, publishedDate)
         }.getOrNull()
     }
 
