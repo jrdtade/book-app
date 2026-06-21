@@ -13,6 +13,9 @@ interface BookDao {
     @Query("SELECT * FROM books ORDER BY addedAt DESC")
     fun observeAll(): Flow<List<Book>>
 
+    @Query("SELECT * FROM books WHERE mediaType = :mediaType ORDER BY addedAt DESC")
+    fun observeByType(mediaType: MediaType): Flow<List<Book>>
+
     @Query("SELECT * FROM books WHERE id = :id")
     suspend fun get(id: String): Book?
 

@@ -25,6 +25,7 @@ class BookRepository(private val context: Context) {
     val collectionDao = db.collectionDao()
 
     fun observeBooks(): Flow<List<Book>> = bookDao.observeAll()
+    fun observeBooksByType(mediaType: MediaType): Flow<List<Book>> = bookDao.observeByType(mediaType)
     fun observeBook(id: String): Flow<Book?> = bookDao.observe(id)
     fun observeHighlights(): Flow<List<Highlight>> = highlightDao.observeAll()
     fun observeHighlightsForBook(bookId: String): Flow<List<Highlight>> = highlightDao.observeForBook(bookId)
@@ -41,6 +42,8 @@ class BookRepository(private val context: Context) {
             id = parsed.id,
             title = parsed.title,
             author = parsed.author,
+            mediaType = MediaType.EPUB,
+            sourceId = LOCAL_EPUB_SOURCE_ID,
             contentDir = parsed.contentDir.absolutePath,
             coverPath = parsed.coverPath,
             spine = parsed.spine.joinToString("\n"),

@@ -12,11 +12,17 @@ class Converters {
 
     @TypeConverter
     fun stringToStatus(value: String): ReadStatus = ReadStatus.valueOf(value)
+
+    @TypeConverter
+    fun mediaTypeToString(mediaType: MediaType): String = mediaType.name
+
+    @TypeConverter
+    fun stringToMediaType(value: String): MediaType = MediaType.valueOf(value)
 }
 
 @Database(
     entities = [Book::class, Highlight::class, Bookmark::class, ReadingSession::class, Shelf::class, BookCollectionCrossRef::class],
-    version = 5,
+    version = 6,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)

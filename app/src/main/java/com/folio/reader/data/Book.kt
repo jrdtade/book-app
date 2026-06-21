@@ -5,12 +5,18 @@ import androidx.room.PrimaryKey
 
 enum class ReadStatus { WANT, READING, FINISHED }
 
+/** Source id for books imported via the local EPUB file parser (as opposed to an extension/source). */
+const val LOCAL_EPUB_SOURCE_ID = "local_epub"
+
 @Entity(tableName = "books")
 data class Book(
     @PrimaryKey val id: String,
     val title: String,
     val author: String,
-    /** Directory (under filesDir/books/<id>) holding the unpacked EPUB contents. */
+    val mediaType: MediaType = MediaType.EPUB,
+    /** Identifier of the source (local parser or extension) this item came from. */
+    val sourceId: String = LOCAL_EPUB_SOURCE_ID,
+    /** Directory (under filesDir/books/<id>) holding the unpacked content. */
     val contentDir: String,
     val coverPath: String?,
     /** Absolute spine order of chapter file paths, joined with '\n'. */
