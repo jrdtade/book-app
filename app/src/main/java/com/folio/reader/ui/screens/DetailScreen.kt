@@ -59,8 +59,6 @@ import com.folio.reader.ui.theme.Paper3
 fun DetailScreen(bookId: String, back: () -> Unit, openReader: () -> Unit, openCoverPicker: () -> Unit = {}) {
     val vm: LibraryViewModel = folioViewModel()
     val books by vm.books.collectAsState()
-    val collections by vm.collections.collectAsState()
-    var showCollectionPicker by remember { mutableStateOf(false) }
     var fetchingSynopsis by remember { mutableStateOf(false) }
     val book = books.firstOrNull { it.id == bookId } ?: run {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Book not found") }
@@ -68,16 +66,6 @@ fun DetailScreen(bookId: String, back: () -> Unit, openReader: () -> Unit, openC
     }
     androidx.compose.runtime.LaunchedEffect(book.synopsis) {
         if (book.synopsis != null) fetchingSynopsis = false
-    }
-
-    if (showCollectionPicker) {
-        CollectionPickerDialog(
-            collections = collections,
-            current = book.collectionId,
-            onDismiss = { showCollectionPicker = false },
-            onPick = { id -> vm.assignToCollection(book, id); showCollectionPicker = false },
-            onCreate = { name -> vm.createCollection(name) },
-        )
     }
 
     LaunchedEffect(book.id) { vm.fetchSynopsis(book) }
@@ -114,8 +102,6 @@ fun DetailScreen(bookId: String, back: () -> Unit, openReader: () -> Unit, openC
                 Spacer(Modifier.height(14.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Meta("${book.chapterCount} chapters")
-                    val collectionName = collections.firstOrNull { it.id == book.collectionId }?.name
-                    Meta(collectionName ?: "Add to shelf", onClick = { showCollectionPicker = true })
                 }
             }
         }
@@ -233,49 +219,6 @@ fun DetailScreen(bookId: String, back: () -> Unit, openReader: () -> Unit, openC
             Spacer(Modifier.height(40.dp))
         }
     }
-}
-
-@Composable
-private fun CollectionPickerDialog(
-    collections: List<com.folio.reader.data.BookCollection>,
-    current: String?,
-    onDismiss: () -> Unit,
-    onPick: (String?) -> Unit,
-    onCreate: (String) -> Unit,
-) {
-    var newName by remember { mutableStateOf("") }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Add to shelf") },
-        text = {
-            Column {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(selected = current == null, onClick = { onPick(null) })
-                    Text("None")
-                }
-                collections.forEach { c ->
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(selected = current == c.id, onClick = { onPick(c.id) })
-                        Text(c.name)
-                    }
-                }
-                Spacer(Modifier.height(10.dp))
-                androidx.compose.material3.OutlinedTextField(
-                    value = newName,
-                    onValueChange = { newName = it },
-                    label = { Text("New shelf name") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { onCreate(newName); newName = "" }) { Text("Create shelf") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Close") }
-        },
-    )
 }
 
 @Composable
