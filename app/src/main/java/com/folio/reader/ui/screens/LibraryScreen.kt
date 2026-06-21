@@ -2,6 +2,8 @@ package com.folio.reader.ui.screens
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -60,6 +62,7 @@ fun LibraryScreen(openBook: (String) -> Unit) {
     var selectedGenre by remember { mutableStateOf<String?>(null) }
     var selectedShelf by remember { mutableStateOf<Shelf?>(null) }
     var showNewShelfDialog by remember { mutableStateOf(false) }
+    var bookToDelete by remember { mutableStateOf<Book?>(null) }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let { vm.importEpub(it) }
     }
@@ -71,6 +74,18 @@ fun LibraryScreen(openBook: (String) -> Unit) {
 
     if (showNewShelfDialog) {
         NewShelfDialog(onDismiss = { showNewShelfDialog = false }, onCreate = { vm.createCollection(it) })
+    }
+
+    bookToDelete?.let { b ->
+        AlertDialog(
+            onDismissRequest = { bookToDelete = null },
+            title = { Text("Remove \"${b.title}\"?") },
+            text = { Text("This removes the book and its downloaded contents from your library. This can't be undone.") },
+            confirmButton = {
+                TextButton(onClick = { vm.deleteBook(b); bookToDelete = null }) { Text("Remove") }
+            },
+            dismissButton = { TextButton(onClick = { bookToDelete = null }) { Text("Cancel") } },
+        )
     }
 
     val statusFiltered = when (filter) {
@@ -148,18 +163,29 @@ fun LibraryScreen(openBook: (String) -> Unit) {
                     horizontalArrangement = Arrangement.spacedBy(20.dp),
                     verticalArrangement = Arrangement.spacedBy(26.dp),
                 ) {
-                    items(filtered, key = { it.id }) { b -> LibraryGridItem(b, onClick = { openBook(b.id) }) }
+                    items(filtered, key = { it.id }) { b ->
+                        LibraryGridItem(
+                            b,
+                            onClick = { openBook(b.id) },
+                            onLongClick = { bookToDelete = b },
+                        )
+                    }
                 }
             }
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun LibraryGridItem(book: Book, onClick: () -> Unit) {
+private fun LibraryGridItem(book: Book, onClick: () -> Unit, onLongClick: () -> Unit) {
     Column {
         Box {
-            Cover(book, width = 154.dp, onClick = onClick)
+            Cover(
+                book,
+                width = 154.dp,
+                modifier = Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick),
+            )
             if (book.status == ReadStatus.FINISHED) {
                 Box(Modifier.align(Alignment.BottomEnd).padding(8.dp)) {
                     Icon(Icons.Filled.Check, contentDescription = null, tint = com.folio.reader.ui.theme.Blue, modifier = Modifier.padding(4.dp))

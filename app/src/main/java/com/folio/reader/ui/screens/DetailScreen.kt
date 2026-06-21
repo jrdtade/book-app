@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material3.AlertDialog
@@ -80,10 +81,24 @@ fun DetailScreen(bookId: String, back: () -> Unit, openReader: () -> Unit, openC
         ShelfPickerDialog(bookId = book.id, onDismiss = { showShelfDialog = false })
     }
 
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Remove \"${book.title}\"?") },
+            text = { Text("This removes the book and its downloaded contents from your library. This can't be undone.") },
+            confirmButton = {
+                TextButton(onClick = { vm.deleteBook(book); showDeleteDialog = false; back() }) { Text("Remove") }
+            },
+            dismissButton = { TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel") } },
+        )
+    }
+
     LazyColumn(Modifier.fillMaxSize()) {
         item {
             Row(Modifier.fillMaxWidth().padding(12.dp, 40.dp, 12.dp, 0.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 IconButton(onClick = back) { Icon(Icons.Filled.ArrowBack, contentDescription = "Back") }
+                IconButton(onClick = { showDeleteDialog = true }) { Icon(Icons.Filled.Delete, contentDescription = "Remove from library") }
             }
             Column(
                 Modifier.fillMaxWidth().padding(24.dp, 12.dp, 24.dp, 22.dp),

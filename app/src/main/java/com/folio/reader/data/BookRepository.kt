@@ -72,29 +72,30 @@ class BookRepository(private val context: Context) {
     suspend fun deleteBookmark(bookmark: Bookmark) = bookmarkDao.delete(bookmark)
 
     suspend fun fetchSynopsis(book: Book) {
-        val result = GeminiApi.classify(book.title, book.author)
+        val (olSynopsis, olDate) = OpenLibraryApi.fetchMetadata(book.title, book.author)
+        val geminiSynopsis = if (olSynopsis == null) GeminiApi.classify(book.title, book.author)?.synopsis else null
+        val synopsis = olSynopsis ?: geminiSynopsis ?: book.synopsis
         bookDao.update(
             book.copy(
-                synopsis = result?.synopsis ?: book.synopsis,
-                synopsisFetchFailed = result?.synopsis == null,
-                publishedDate = result?.publishedDate ?: book.publishedDate,
-                genre = result?.genre ?: book.genre,
-                tags = result?.tags?.joinToString(",") ?: book.tags,
-                classificationFetchFailed = result == null,
+                synopsis = synopsis,
+                synopsisFetchFailed = synopsis == null,
+                publishedDate = olDate ?: book.publishedDate,
             ),
         )
     }
 
     suspend fun classifyBook(book: Book) {
-        val result = GeminiApi.classify(book.title, book.author)
+        val classification = GeminiApi.classify(book.title, book.author)
+        val (olSynopsis, olDate) = OpenLibraryApi.fetchMetadata(book.title, book.author)
+        val synopsis = classification?.synopsis ?: olSynopsis ?: book.synopsis
         bookDao.update(
             book.copy(
-                genre = result?.genre ?: book.genre,
-                tags = result?.tags?.joinToString(",") ?: book.tags,
-                synopsis = result?.synopsis ?: book.synopsis,
-                synopsisFetchFailed = result?.synopsis == null && book.synopsis == null,
-                publishedDate = result?.publishedDate ?: book.publishedDate,
-                classificationFetchFailed = result == null,
+                genre = classification?.genre ?: book.genre,
+                tags = classification?.tags?.joinToString(",") ?: book.tags,
+                synopsis = synopsis,
+                synopsisFetchFailed = synopsis == null,
+                publishedDate = classification?.publishedDate ?: olDate ?: book.publishedDate,
+                classificationFetchFailed = classification == null,
             ),
         )
     }
