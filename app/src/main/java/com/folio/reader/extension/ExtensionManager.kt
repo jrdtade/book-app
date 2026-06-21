@@ -219,6 +219,11 @@ class ExtensionManager(
                     ?: File(extensionsDir, "${manifest.pkgName}.jar").takeIf { it.exists() }
                     ?: File(extensionsDir, "${manifest.pkgName}.apk").takeIf { it.exists() }
                     ?: return@mapNotNull null
+                // Android 10+ refuses to DexClassLoader a file the app can still write
+                // to (W^X enforcement against loading tampered code) — lock it down here
+                // too, not just right after download, so apks written before this fix
+                // existed get fixed up on the next scan instead of failing forever.
+                codeFile.setReadOnly()
                 manifest.pkgName to DiscoveredExtension(manifest, codeFile)
             }.getOrNull()
         }.toMap()
@@ -411,6 +416,9 @@ class ExtensionManager(
                     val body = checkNotNull(response.body)
                     val apkFile = File(extensionsDir, "${extension.pkgName}.apk")
                     body.byteStream().use { input -> apkFile.outputStream().use { input.copyTo(it) } }
+                    // Must happen before DexClassLoader ever touches this file — see
+                    // the matching comment in scanExtensions().
+                    apkFile.setReadOnly()
                 }
 
                 val manifest = ExtensionManifest(
