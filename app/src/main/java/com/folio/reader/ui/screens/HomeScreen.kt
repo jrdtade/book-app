@@ -137,16 +137,7 @@ fun HomeScreen(
             }
         }
 
-        if (reading.isEmpty() && books.isEmpty()) {
-            item {
-                Box(
-                    modifier = Modifier.fillParentMaxHeight(0.8f).fillMaxWidth(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    EmptyLibraryCard(onImport = { launcher.launch(arrayOf("application/epub+zip")) })
-                }
-            }
-        } else if (reading.isEmpty()) {
+        if (reading.isEmpty()) {
             item { EmptyLibraryCard(onImport = { launcher.launch(arrayOf("application/epub+zip")) }) }
         } else {
             val hero = reading.first()

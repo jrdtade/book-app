@@ -2,7 +2,10 @@ package com.folio.reader.ui.screens
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,6 +23,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
@@ -32,8 +36,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -47,7 +49,9 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.folio.reader.data.Book
 import com.folio.reader.data.MediaType
@@ -56,7 +60,11 @@ import com.folio.reader.data.ReadStatus
 import com.folio.reader.data.overallProgress
 import com.folio.reader.ui.components.Cover
 import com.folio.reader.ui.folioViewModel
+import com.folio.reader.ui.theme.Ink
+import com.folio.reader.ui.theme.Ink2
 import com.folio.reader.ui.theme.Ink3
+import com.folio.reader.ui.theme.Paper
+import com.folio.reader.ui.theme.Paper3
 
 private enum class LibFilter(val label: String) { ALL("All"), READING("Reading"), FINISHED("Finished"), WANT("Want to read") }
 
@@ -144,15 +152,16 @@ fun LibraryScreen(openBook: (String) -> Unit) {
                 Text("${books.size} ${category.label.uppercase()}", color = Ink3, style = MaterialTheme.typography.labelMedium)
                 Text("Library", style = MaterialTheme.typography.headlineLarge)
             }
-            TabRow(selectedTabIndex = category.ordinal) {
-                LibCategory.entries.forEach { c ->
-                    Tab(
-                        selected = category == c,
-                        onClick = { category = c },
-                        text = { Text(c.label) },
-                    )
+            LazyRow(
+                Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = 20.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                items(LibCategory.entries) { c ->
+                    CategoryPill(label = c.label, selected = category == c, onClick = { category = c })
                 }
             }
+            Spacer(Modifier.height(14.dp))
             LazyRow(
                 Modifier.fillMaxWidth(),
                 contentPadding = PaddingValues(horizontal = 16.dp),
@@ -217,6 +226,27 @@ fun LibraryScreen(openBook: (String) -> Unit) {
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun CategoryPill(label: String, selected: Boolean, onClick: () -> Unit) {
+    val bg by animateColorAsState(if (selected) Ink else Paper3, label = "categoryPillBg")
+    val fg by animateColorAsState(if (selected) Paper else Ink2, label = "categoryPillFg")
+    Box(
+        Modifier
+            .clip(RoundedCornerShape(50))
+            .background(bg)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 18.dp, vertical = 9.dp),
+    ) {
+        Text(
+            label,
+            color = fg,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            maxLines = 1,
+        )
     }
 }
 
