@@ -50,7 +50,8 @@ object GoogleBooksApi {
         val results = mutableListOf<CoverCandidate>()
         for (i in 0 until items.length()) {
             val item = items.getJSONObject(i)
-            val volumeId = item.optString("id", "").ifBlank { continue }
+            val volumeId = item.optString("id", "")
+            if (volumeId.isBlank()) continue
             val info = item.optJSONObject("volumeInfo") ?: continue
             val images = info.optJSONObject("imageLinks") ?: continue
             val rawThumb = images.optString("thumbnail", "").ifBlank { images.optString("smallThumbnail", "") }
