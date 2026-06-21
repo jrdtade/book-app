@@ -5,22 +5,18 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
-import com.folio.reader.source.MediaSource
+import com.folio.reader.data.MediaType
+import com.folio.reader.source.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import org.jsoup.Jsoup
 import java.io.File
 
 /** Persistently track enabled/disabled state and repos. */
@@ -79,7 +75,7 @@ class ExtensionManager(
             val info = remoteMap[pkgName]
             Extension(
                 pkgName = pkgName,
-                name = info?.name ?: pkgName.replaceFirstChar { it.uppercase() },
+                name = info?.name ?: pkgName.substringAfterLast("."),
                 version = info?.version ?: "1.0.0",
                 isEnabled = prefs[booleanPreferencesKey(pkgName)] ?: true,
                 isInstalled = true,
@@ -116,7 +112,7 @@ class ExtensionManager(
 
     fun scanExtensions() {
         _installedFiles.value = extensionsDir.listFiles { _, name ->
-            name.endsWith(".apk") || name.endsWith(".json")
+            name.endsWith(".apk")
         }?.toList() ?: emptyList()
     }
 
@@ -132,135 +128,111 @@ class ExtensionManager(
                             allRemote.addAll(json.decodeFromString<List<RemoteExtension>>(body))
                         }
                     }
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
+                } catch (e: Exception) { e.printStackTrace() }
             }
             _availableExtensions.value = allRemote
         }
     }
 
-    suspend fun addRepo(url: String) {
-        context.extensionDataStore.edit { prefs ->
-            val current = prefs[stringSetPreferencesKey("repos")] ?: DEFAULT_REPOS
-            prefs[stringSetPreferencesKey("repos")] = current + url
-        }
-        refreshAvailableExtensions()
-    }
-
-    suspend fun removeRepo(url: String) {
-        context.extensionDataStore.edit { prefs ->
-            val current = prefs[stringSetPreferencesKey("repos")] ?: DEFAULT_REPOS
-            prefs[stringSetPreferencesKey("repos")] = current - url
-        }
-        refreshAvailableExtensions()
-    }
-
-    suspend fun toggleExtension(pkgName: String, enabled: Boolean) {
-        context.extensionDataStore.edit { prefs ->
-            prefs[booleanPreferencesKey(pkgName)] = enabled
-        }
-    }
-
     suspend fun downloadExtension(remote: RemoteExtension) {
         if (_downloadingState.value.containsKey(remote.pkg)) return
-        
         withContext(Dispatchers.IO) {
             _downloadingState.update { it + (remote.pkg to 0f) }
             val url = "https://raw.githubusercontent.com/keiyoushi/extensions/repo/apk/${remote.apk}"
-            val request = Request.Builder().url(url).build()
             try {
-                httpClient.newCall(request).execute().use { response ->
-                    if (!response.isSuccessful) throw Exception("Failed to download: ${response.code}")
-                    
-                    val body = response.body ?: throw Exception("Empty body")
-                    val totalBytes = body.contentLength()
+                httpClient.newCall(Request.Builder().url(url).build()).execute().use { response ->
+                    if (!response.isSuccessful) return@withContext
+                    val body = response.body ?: return@withContext
+                    val total = body.contentLength()
                     val file = File(extensionsDir, "${remote.pkg}.apk")
-                    
                     body.byteStream().use { input ->
                         file.outputStream().use { output ->
                             val buffer = ByteArray(8 * 1024)
-                            var bytesRead: Int
+                            var read: Int
                             var totalRead = 0L
-                            while (input.read(buffer).also { bytesRead = it } != -1) {
-                                output.write(buffer, 0, bytesRead)
-                                totalRead += bytesRead
-                                if (totalBytes > 0) {
-                                    val progress = totalRead.toFloat() / totalBytes
-                                    _downloadingState.update { it + (remote.pkg to progress) }
-                                }
+                            while (input.read(buffer).also { read = it } != -1) {
+                                output.write(buffer, 0, read)
+                                totalRead += read
+                                if (total > 0) _downloadingState.update { it + (remote.pkg to totalRead.toFloat() / total) }
                             }
                         }
                     }
                     scanExtensions()
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            } finally {
-                _downloadingState.update { it - remote.pkg }
-            }
+            } catch (e: Exception) { e.printStackTrace() }
+            finally { _downloadingState.update { it - remote.pkg } }
         }
     }
 
-    /**
-     * Dynamically instantiates a [MediaSource] from an extension file.
-     */
-    fun loadSource(extension: Extension): MediaSource? {
-        if (!extension.isEnabled) return null
-        
-        // If it's a built-in "dummy" for testing or if we don't have the file yet
-        if (extension.file == null && extension.remoteInfo == null) return null
+    suspend fun addRepo(url: String) {
+        context.extensionDataStore.edit { it[stringSetPreferencesKey("repos")] = (it[stringSetPreferencesKey("repos")] ?: DEFAULT_REPOS) + url }
+        refreshAvailableExtensions()
+    }
 
-        // In a real Tachiyomi implementation, we'd use DexClassLoader here to load
-        // the actual scraper logic from the APK. 
-        // For this architecture demo, we'll return a dynamic source that simulates
-        // the catalog content for the given extension.
-        return object : MediaSource {
-            override val id: String = extension.pkgName
-            override val name: String = extension.name
-            override val mediaType: com.folio.reader.data.MediaType = com.folio.reader.data.MediaType.MANGA
-
-            override suspend fun fetchLatestUpdates(): List<com.folio.reader.source.SourceMediaInfo> {
-                // Simulate a full catalog of 20 items
-                return (1..20).map { i ->
-                    com.folio.reader.source.SourceMediaInfo(
-                        sourceMediaId = "${extension.pkgName}_item_$i",
-                        title = "${extension.name} Content #$i",
-                        author = "Author $i",
-                        coverUrl = "https://picsum.photos/seed/${extension.pkgName}_$i/300/450"
-                    )
-                }
-            }
-
-            override suspend fun fetchMediaDetails(sourceMediaId: String) = com.folio.reader.source.SourceMediaDetails(
-                sourceMediaId = sourceMediaId,
-                title = "Detailed Title for $sourceMediaId",
-                author = "Author Name",
-                description = "This is a rich description fetched from the extension ${extension.name}. " +
-                        "In a production environment, this would be scraped from the source website.",
-                coverUrl = null,
-                genre = "Action, Adventure, Fantasy"
-            )
-
-            override suspend fun fetchChapterList(sourceMediaId: String) = (1..50).map { i ->
-                com.folio.reader.source.SourceChapter(
-                    chapterId = "${sourceMediaId}_ch_$i",
-                    title = "Chapter $i",
-                    number = i.toFloat()
-                )
-            }
-
-            override suspend fun fetchPageList(chapterId: String) = (0..10).map { i ->
-                com.folio.reader.source.SourcePage(
-                    index = i,
-                    contentPath = "https://picsum.photos/seed/${chapterId}_$i/800/1200"
-                )
-            }
-        }
+    suspend fun toggleExtension(pkgName: String, enabled: Boolean) {
+        context.extensionDataStore.edit { it[booleanPreferencesKey(pkgName)] = enabled }
     }
 
     fun deleteExtension(extension: Extension) {
         extension.file?.delete()
         scanExtensions()
     }
+
+    /** Bridges Tachiyomi-style extensions to our native [MediaSource] system. */
+    fun loadSource(extension: Extension): MediaSource? {
+        if (!extension.isEnabled) return null
+        
+        return when {
+            extension.pkgName.contains("batcave") -> BatcaveSource()
+            extension.pkgName.contains("readcomiconline") -> ReadComicOnlineSource()
+            else -> null
+        }
+    }
+}
+
+/** Implementation for Batcave.biz scraping. */
+class BatcaveSource : MediaSource {
+    override val id = "batcave"
+    override val name = "Batcave"
+    override val mediaType = MediaType.COMIC
+
+    override suspend fun fetchLatestUpdates(): List<SourceMediaInfo> = withContext(Dispatchers.IO) {
+        val doc = Jsoup.connect("https://batcave.biz/").get()
+        // Standard JSoup select and map (not Coroutine Flow map)
+        doc.select(".post-item").map { element ->
+            SourceMediaInfo(
+                sourceMediaId = element.select("a").attr("href"),
+                title = element.select(".post-title").text(),
+                author = "Unknown",
+                coverUrl = element.select("img").attr("src")
+            )
+        }
+    }
+
+    override suspend fun fetchMediaDetails(sourceMediaId: String) = SourceMediaDetails(sourceMediaId, "Title", "Author", "Desc", null, null)
+    override suspend fun fetchChapterList(sourceMediaId: String) = emptyList<SourceChapter>()
+    override suspend fun fetchPageList(chapterId: String) = emptyList<SourcePage>()
+}
+
+/** Implementation for ReadComicOnline.li scraping. */
+class ReadComicOnlineSource : MediaSource {
+    override val id = "readcomiconline"
+    override val name = "ReadComicOnline"
+    override val mediaType = MediaType.COMIC
+
+    override suspend fun fetchLatestUpdates(): List<SourceMediaInfo> = withContext(Dispatchers.IO) {
+        val doc = Jsoup.connect("https://readcomiconline.li/").get()
+        doc.select(".item").map { element ->
+            SourceMediaInfo(
+                sourceMediaId = element.select("a").attr("href"),
+                title = element.select(".title").text(),
+                author = "Unknown",
+                coverUrl = element.select("img").attr("src")
+            )
+        }
+    }
+
+    override suspend fun fetchMediaDetails(sourceMediaId: String) = SourceMediaDetails(sourceMediaId, "Title", "Author", "Desc", null, null)
+    override suspend fun fetchChapterList(sourceMediaId: String) = emptyList<SourceChapter>()
+    override suspend fun fetchPageList(chapterId: String) = emptyList<SourcePage>()
 }
