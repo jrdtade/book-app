@@ -1,5 +1,6 @@
 package com.folio.reader.ui.screens
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -40,6 +41,7 @@ import com.folio.reader.ui.ComicReaderViewModel
 import com.folio.reader.ui.components.ZoomableImage
 import com.folio.reader.ui.folioViewModel
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ComicReaderScreen(bookId: String, back: () -> Unit) {
     val vm: ComicReaderViewModel = folioViewModel()

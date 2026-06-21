@@ -2,6 +2,7 @@ package com.folio.reader.ui.components
 
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -12,7 +13,6 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.offset
 import androidx.compose.ui.unit.IntOffset
 import coil.compose.AsyncImage
 import java.io.File
