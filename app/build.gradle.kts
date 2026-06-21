@@ -83,10 +83,20 @@ dependencies {
     // Some extensions add okhttp3.brotli.BrotliInterceptor themselves (sites that serve
     // brotli-compressed responses); without this on the classpath their class fails to link.
     implementation("com.squareup.okhttp3:okhttp-brotli:4.12.0")
+    // Folio's own + the COMPLETE set of libraries Keiyoushi's "common" bundle exposes to
+    // every extension (see gradle/libs.versions.toml in github.com/keiyoushi/extensions-source).
+    // Extensions compile against these with `compileOnly` and expect the host app to provide
+    // them at runtime — a missing one shows up as "Failed resolution of: <class>". Provided
+    // here all at once rather than discovered one crash at a time.
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
     // Some extensions' shared helper libs (e.g. keiyoushi.utils) resolve a ProtoBuf
     // instance via Injekt, same as Json — registered in FolioApp to match.
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-protobuf:1.6.3")
+    // keiyoushi.utils decodes JSON straight from an OkHttp BufferedSource via
+    // Json.decodeFromBufferedSource (kotlinx.serialization.json.okio.OkioStreamsKt).
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json-okio:1.6.3")
+    // Nullness annotations referenced by some extension/library bytecode.
+    implementation("org.jspecify:jspecify:1.0.0")
     implementation("org.jsoup:jsoup:1.17.2")
     // Pure-Java unrar implementation, used to read .cbr comic archives.
     implementation("com.github.junrar:junrar:7.5.5")
