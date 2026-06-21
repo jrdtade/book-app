@@ -37,6 +37,7 @@ import androidx.navigation.navArgument
 import androidx.navigation.NavType
 import com.folio.reader.ui.LibraryViewModel
 import com.folio.reader.ui.folioViewModel
+import com.folio.reader.ui.screens.CoverPickerScreen
 import com.folio.reader.ui.screens.DetailScreen
 import com.folio.reader.ui.screens.HomeScreen
 import com.folio.reader.ui.screens.LibraryScreen
