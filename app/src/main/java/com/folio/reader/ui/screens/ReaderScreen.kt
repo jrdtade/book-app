@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -32,6 +33,7 @@ import androidx.compose.material.icons.automirrored.filled.FormatAlignRight
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Bookmark as BookmarkIcon
 import androidx.compose.material.icons.filled.BorderColor
 import androidx.compose.material.icons.filled.Brightness6
 import androidx.compose.material.icons.filled.Close
@@ -458,7 +460,7 @@ private fun ReaderMenuSheet(
             }
             ChromePill("Contents · ${(pct * 100).toInt()}%", Icons.AutoMirrored.Filled.List, onContents)
             ChromePill("Search Book", Icons.Filled.Search, onSearch)
-            ChromePill("Bookmarks", Icons.Filled.Bookmark, onBookmarks)
+            ChromePill("Bookmarks", BookmarkIcon, onBookmarks)
             ChromePill("Highlights & Notes", Icons.Filled.BorderColor, onHighlights)
             ChromePill("Themes & Settings", Icons.Filled.TextFields, onThemes)
             TextButton(onClick = onAddBookmark, modifier = Modifier.fillMaxWidth()) { Text("Bookmark this page") }
