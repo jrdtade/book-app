@@ -27,8 +27,13 @@ fun SourceBrowseScreen(
     var loading by remember { mutableStateOf(true) }
 
     LaunchedEffect(source.id) {
-        items = source.fetchLatestUpdates()
-        loading = false
+        try {
+            items = source.fetchLatestUpdates()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        } finally {
+            loading = false
+        }
     }
 
     Scaffold(

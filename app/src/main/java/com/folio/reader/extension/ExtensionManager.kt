@@ -183,30 +183,41 @@ class ExtensionManager(
         if (!extension.isEnabled) return null
         
         return when {
-            extension.pkgName.contains("batcave") -> BatcaveSource()
-            extension.pkgName.contains("readcomiconline") -> ReadComicOnlineSource()
+            extension.pkgName.contains("batcave") -> BatcaveSource(httpClient)
+            extension.pkgName.contains("readcomiconline") -> ReadComicOnlineSource(httpClient)
             else -> null
         }
     }
 }
 
+/** Helper to fetch JSoup document using OkHttp for interceptor support. */
+private suspend fun OkHttpClient.fetchDoc(url: String): org.jsoup.nodes.Document = withContext(Dispatchers.IO) {
+    val request = Request.Builder().url(url).build()
+    newCall(request).execute().use { response ->
+        if (!response.isSuccessful) throw java.io.IOException("Unexpected code $response")
+        Jsoup.parse(response.body?.string() ?: "", url)
+    }
+}
+
 /** Implementation for Batcave.biz scraping. */
-class BatcaveSource : MediaSource {
+class BatcaveSource(private val client: OkHttpClient) : MediaSource {
     override val id = "batcave"
     override val name = "Batcave"
     override val mediaType = MediaType.COMIC
 
-    override suspend fun fetchLatestUpdates(): List<SourceMediaInfo> = withContext(Dispatchers.IO) {
-        val doc = Jsoup.connect("https://batcave.biz/").get()
-        // Standard JSoup select and map (not Coroutine Flow map)
+    override suspend fun fetchLatestUpdates(): List<SourceMediaInfo> = try {
+        val doc = client.fetchDoc("https://batcave.biz/")
         doc.select(".post-item").map { element ->
             SourceMediaInfo(
-                sourceMediaId = element.select("a").attr("href"),
+                sourceMediaId = element.select("a").first()?.attr("abs:href") ?: "",
                 title = element.select(".post-title").text(),
                 author = "Unknown",
                 coverUrl = element.select("img").attr("src")
             )
         }
+    } catch (e: Exception) {
+        e.printStackTrace()
+        emptyList()
     }
 
     override suspend fun fetchMediaDetails(sourceMediaId: String) = SourceMediaDetails(sourceMediaId, "Title", "Author", "Desc", null, null)
@@ -215,21 +226,24 @@ class BatcaveSource : MediaSource {
 }
 
 /** Implementation for ReadComicOnline.li scraping. */
-class ReadComicOnlineSource : MediaSource {
+class ReadComicOnlineSource(private val client: OkHttpClient) : MediaSource {
     override val id = "readcomiconline"
     override val name = "ReadComicOnline"
     override val mediaType = MediaType.COMIC
 
-    override suspend fun fetchLatestUpdates(): List<SourceMediaInfo> = withContext(Dispatchers.IO) {
-        val doc = Jsoup.connect("https://readcomiconline.li/").get()
+    override suspend fun fetchLatestUpdates(): List<SourceMediaInfo> = try {
+        val doc = client.fetchDoc("https://readcomiconline.li/")
         doc.select(".item").map { element ->
             SourceMediaInfo(
-                sourceMediaId = element.select("a").attr("href"),
+                sourceMediaId = element.select("a").first()?.attr("abs:href") ?: "",
                 title = element.select(".title").text(),
                 author = "Unknown",
                 coverUrl = element.select("img").attr("src")
             )
         }
+    } catch (e: Exception) {
+        e.printStackTrace()
+        emptyList()
     }
 
     override suspend fun fetchMediaDetails(sourceMediaId: String) = SourceMediaDetails(sourceMediaId, "Title", "Author", "Desc", null, null)
