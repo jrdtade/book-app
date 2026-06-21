@@ -5,8 +5,6 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverter
 import androidx.room.TypeConverters
-import androidx.room.migration.Migration
-import androidx.sqlite.db.SupportSQLiteDatabase
 
 class Converters {
     @TypeConverter
@@ -16,25 +14,16 @@ class Converters {
     fun stringToStatus(value: String): ReadStatus = ReadStatus.valueOf(value)
 }
 
-private val MIGRATION_1_2 = object : Migration(1, 2) {
-    override fun migrate(db: SupportSQLiteDatabase) {
-        db.execSQL("ALTER TABLE books ADD COLUMN synopsis TEXT")
-        db.execSQL("ALTER TABLE books ADD COLUMN collectionId TEXT")
-        db.execSQL(
-            "CREATE TABLE IF NOT EXISTS collections (id TEXT NOT NULL PRIMARY KEY, name TEXT NOT NULL, createdAt INTEGER NOT NULL)",
-        )
-    }
-}
-
 @Database(
-    entities = [Book::class, Highlight::class, ReadingSession::class, Shelf::class, BookCollectionCrossRef::class],
-    version = 3,
+    entities = [Book::class, Highlight::class, Bookmark::class, ReadingSession::class, Shelf::class, BookCollectionCrossRef::class],
+    version = 4,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
 abstract class FolioDatabase : RoomDatabase() {
     abstract fun bookDao(): BookDao
     abstract fun highlightDao(): HighlightDao
+    abstract fun bookmarkDao(): BookmarkDao
     abstract fun sessionDao(): SessionDao
     abstract fun collectionDao(): CollectionDao
 

@@ -34,11 +34,26 @@ interface HighlightDao {
     @Query("SELECT * FROM highlights ORDER BY createdAt DESC")
     fun observeAll(): Flow<List<Highlight>>
 
+    @Query("SELECT * FROM highlights WHERE bookId = :bookId ORDER BY createdAt DESC")
+    fun observeForBook(bookId: String): Flow<List<Highlight>>
+
     @Insert
     suspend fun insert(highlight: Highlight)
 
     @Delete
     suspend fun delete(highlight: Highlight)
+}
+
+@Dao
+interface BookmarkDao {
+    @Query("SELECT * FROM bookmarks WHERE bookId = :bookId ORDER BY createdAt DESC")
+    fun observeForBook(bookId: String): Flow<List<Bookmark>>
+
+    @Insert
+    suspend fun insert(bookmark: Bookmark)
+
+    @Delete
+    suspend fun delete(bookmark: Bookmark)
 }
 
 @Dao

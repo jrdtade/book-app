@@ -6,6 +6,7 @@
 <style>
   html, body { margin:0; padding:0; height:100%; width:100%; overflow:hidden; background:transparent; }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; -webkit-user-select:none; user-select:none; }
+  #content, #scrollContent { -webkit-user-select:text; user-select:text; }
   #stage { position:fixed; inset:0; overflow:hidden; }
   /* shifter slides horizontally; #stage clips. content must NOT clip or
      every column past the first is hidden (only first page was readable). */
@@ -154,6 +155,12 @@
     pn.textContent = (mode === 'paged' && total > 1) ? (page + 1) + ' / ' + total : '';
     if (window.FolioBridge) window.FolioBridge.onState(page, total);
   }
+
+  document.addEventListener('selectionchange', function () {
+    var sel = window.getSelection();
+    var text = sel ? sel.toString() : '';
+    if (window.FolioBridge) window.FolioBridge.onSelection(text);
+  });
 
   document.getElementById('scrollContent').addEventListener('scroll', function (e) {
     var el = e.target;

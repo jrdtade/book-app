@@ -18,12 +18,15 @@ class BookRepository(private val context: Context) {
     private val db = FolioDatabase.get(context)
     val bookDao = db.bookDao()
     val highlightDao = db.highlightDao()
+    val bookmarkDao = db.bookmarkDao()
     val sessionDao = db.sessionDao()
     val collectionDao = db.collectionDao()
 
     fun observeBooks(): Flow<List<Book>> = bookDao.observeAll()
     fun observeBook(id: String): Flow<Book?> = bookDao.observe(id)
     fun observeHighlights(): Flow<List<Highlight>> = highlightDao.observeAll()
+    fun observeHighlightsForBook(bookId: String): Flow<List<Highlight>> = highlightDao.observeForBook(bookId)
+    fun observeBookmarksForBook(bookId: String): Flow<List<Bookmark>> = bookmarkDao.observeForBook(bookId)
     fun observeSessions(): Flow<List<ReadingSession>> = sessionDao.observeAll()
     fun observeCollections(): Flow<List<Shelf>> = collectionDao.observeAll()
     fun observeCollectionIdsForBook(bookId: String): Flow<List<String>> = collectionDao.observeCollectionIdsForBook(bookId)
@@ -61,6 +64,10 @@ class BookRepository(private val context: Context) {
     }
 
     suspend fun addHighlight(highlight: Highlight) = highlightDao.insert(highlight)
+    suspend fun deleteHighlight(highlight: Highlight) = highlightDao.delete(highlight)
+
+    suspend fun addBookmark(bookmark: Bookmark) = bookmarkDao.insert(bookmark)
+    suspend fun deleteBookmark(bookmark: Bookmark) = bookmarkDao.delete(bookmark)
 
     suspend fun fetchSynopsis(book: Book) {
         val (synopsis, publishedDate) = OpenLibraryApi.fetchMetadata(book.title, book.author)
