@@ -11,11 +11,20 @@ class BookRepository(private val context: Context) {
     val bookDao = db.bookDao()
     val highlightDao = db.highlightDao()
     val sessionDao = db.sessionDao()
+    val collectionDao = db.collectionDao()
 
     fun observeBooks(): Flow<List<Book>> = bookDao.observeAll()
     fun observeBook(id: String): Flow<Book?> = bookDao.observe(id)
     fun observeHighlights(): Flow<List<Highlight>> = highlightDao.observeAll()
     fun observeSessions(): Flow<List<ReadingSession>> = sessionDao.observeAll()
+    fun observeCollections(): Flow<List<BookCollection>> = collectionDao.observeAll()
+
+    suspend fun addCollection(collection: BookCollection) = collectionDao.insert(collection)
+
+    suspend fun deleteCollection(collection: BookCollection) {
+        bookDao.clearCollection(collection.id)
+        collectionDao.delete(collection)
+    }
 
     suspend fun importEpub(uri: Uri): Book {
         val parsed = EpubParser.import(context, uri)

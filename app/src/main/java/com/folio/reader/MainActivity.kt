@@ -28,6 +28,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.navigation.NavType
+import com.folio.reader.ui.screens.CoverPickerScreen
 import com.folio.reader.ui.screens.DetailScreen
 import com.folio.reader.ui.screens.HomeScreen
 import com.folio.reader.ui.screens.LibraryScreen
@@ -126,7 +127,15 @@ fun FolioAppRoot() {
                     bookId = id,
                     back = { navController.popBackStack() },
                     openReader = { navController.navigate("reader/$id") },
+                    pickCover = { navController.navigate("cover-picker/$id") },
                 )
+            }
+            composable(
+                "cover-picker/{bookId}",
+                arguments = listOf(navArgument("bookId") { type = NavType.StringType }),
+            ) { entry ->
+                val id = entry.arguments?.getString("bookId") ?: return@composable
+                CoverPickerScreen(bookId = id, back = { navController.popBackStack() })
             }
             composable(
                 "reader/{bookId}",

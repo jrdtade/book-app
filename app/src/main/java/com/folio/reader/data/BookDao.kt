@@ -27,6 +27,21 @@ interface BookDao {
 
     @Delete
     suspend fun delete(book: Book)
+
+    @Query("UPDATE books SET collectionId = NULL WHERE collectionId = :collectionId")
+    suspend fun clearCollection(collectionId: String)
+}
+
+@Dao
+interface CollectionDao {
+    @Query("SELECT * FROM collections ORDER BY createdAt ASC")
+    fun observeAll(): Flow<List<BookCollection>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(collection: BookCollection)
+
+    @Delete
+    suspend fun delete(collection: BookCollection)
 }
 
 @Dao

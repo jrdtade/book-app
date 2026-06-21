@@ -1,6 +1,7 @@
 package com.folio.reader.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,17 +18,25 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -44,12 +53,28 @@ import com.folio.reader.ui.theme.Ink3
 import com.folio.reader.ui.theme.Paper3
 
 @Composable
-fun DetailScreen(bookId: String, back: () -> Unit, openReader: () -> Unit) {
+fun DetailScreen(bookId: String, back: () -> Unit, openReader: () -> Unit, pickCover: () -> Unit) {
     val vm: LibraryViewModel = folioViewModel()
     val books by vm.books.collectAsState()
+    val collections by vm.collections.collectAsState()
+    var showCollectionPicker by remember { mutableStateOf(false) }
+    var fetchingSynopsis by remember { mutableStateOf(false) }
     val book = books.firstOrNull { it.id == bookId } ?: run {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Book not found") }
         return
+    }
+    androidx.compose.runtime.LaunchedEffect(book.synopsis) {
+        if (book.synopsis != null) fetchingSynopsis = false
+    }
+
+    if (showCollectionPicker) {
+        CollectionPickerDialog(
+            collections = collections,
+            current = book.collectionId,
+            onDismiss = { showCollectionPicker = false },
+            onPick = { id -> vm.assignToCollection(book, id); showCollectionPicker = false },
+            onCreate = { name -> vm.createCollection(name) },
+        )
     }
 
     LazyColumn(Modifier.fillMaxSize()) {
@@ -62,13 +87,21 @@ fun DetailScreen(bookId: String, back: () -> Unit, openReader: () -> Unit) {
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Cover(book, width = 172.dp)
-                Spacer(Modifier.height(22.dp))
+                Spacer(Modifier.height(10.dp))
+                TextButton(onClick = pickCover) {
+                    Icon(Icons.Filled.Image, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Change cover")
+                }
+                Spacer(Modifier.height(12.dp))
                 Text(book.title, style = MaterialTheme.typography.headlineMedium, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                 Spacer(Modifier.height(5.dp))
                 Text(book.author, color = Ink2)
                 Spacer(Modifier.height(14.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Meta("${book.chapterCount} chapters")
+                    val collectionName = collections.firstOrNull { it.id == book.collectionId }?.name
+                    Meta(collectionName ?: "Add to shelf", onClick = { showCollectionPicker = true })
                 }
             }
         }
@@ -129,6 +162,29 @@ fun DetailScreen(bookId: String, back: () -> Unit, openReader: () -> Unit) {
 
         item {
             Column(Modifier.padding(24.dp, 18.dp, 24.dp, 6.dp)) {
+                Text("DESCRIPTION", color = Ink3, style = MaterialTheme.typography.labelMedium)
+                Spacer(Modifier.height(8.dp))
+                Card(shape = RoundedCornerShape(16.dp)) {
+                    Column(Modifier.padding(16.dp)) {
+                        when {
+                            book.synopsis != null -> Text(book.synopsis!!, style = MaterialTheme.typography.bodyMedium)
+                            fetchingSynopsis -> Row(verticalAlignment = Alignment.CenterVertically) {
+                                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                                Spacer(Modifier.width(10.dp))
+                                Text("Looking up a synopsis…", color = Ink3)
+                            }
+                            else -> OutlinedButton(
+                                onClick = { fetchingSynopsis = true; vm.fetchSynopsis(book) },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) { Text("Get description from the internet") }
+                        }
+                    }
+                }
+            }
+        }
+
+        item {
+            Column(Modifier.padding(24.dp, 6.dp, 24.dp, 6.dp)) {
                 Text("DETAILS", color = Ink3, style = MaterialTheme.typography.labelMedium)
                 Spacer(Modifier.height(8.dp))
                 Card(shape = RoundedCornerShape(16.dp)) {
@@ -145,10 +201,54 @@ fun DetailScreen(bookId: String, back: () -> Unit, openReader: () -> Unit) {
 }
 
 @Composable
-private fun Meta(text: String) {
+private fun CollectionPickerDialog(
+    collections: List<com.folio.reader.data.BookCollection>,
+    current: String?,
+    onDismiss: () -> Unit,
+    onPick: (String?) -> Unit,
+    onCreate: (String) -> Unit,
+) {
+    var newName by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add to shelf") },
+        text = {
+            Column {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(selected = current == null, onClick = { onPick(null) })
+                    Text("None")
+                }
+                collections.forEach { c ->
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(selected = current == c.id, onClick = { onPick(c.id) })
+                        Text(c.name)
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+                androidx.compose.material3.OutlinedTextField(
+                    value = newName,
+                    onValueChange = { newName = it },
+                    label = { Text("New shelf name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onCreate(newName); newName = "" }) { Text("Create shelf") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Close") }
+        },
+    )
+}
+
+@Composable
+private fun Meta(text: String, onClick: (() -> Unit)? = null) {
     Box(
         Modifier
             .background(Paper3, RoundedCornerShape(9.dp))
+            .let { if (onClick != null) it.clickable(onClick = onClick) else it }
             .padding(11.dp, 5.dp),
     ) { Text(text, color = Ink2, style = MaterialTheme.typography.bodySmall) }
 }

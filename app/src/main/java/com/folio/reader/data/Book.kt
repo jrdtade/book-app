@@ -27,6 +27,10 @@ data class Book(
     /** Cover background as a hex string so the typographic cover can render without the file. */
     var coverColorA: Long = 0xFF3A4EA8,
     var coverColorB: Long = 0xFF26336E,
+    /** Synopsis fetched from the Google Books API, if the user requested one. */
+    var synopsis: String? = null,
+    /** Shelf/collection this book has been filed under, if any. */
+    var collectionId: String? = null,
 )
 
 fun Book.overallProgress(): Float =

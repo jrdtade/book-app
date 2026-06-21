@@ -61,7 +61,7 @@ fun HomeScreen(
     val vm: com.folio.reader.ui.LibraryViewModel = folioViewModel()
     val books by vm.books.collectAsState()
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        uri?.let { vm.importEpub(it) }
+        uri?.let { vm.importEpub(it) { goToTab("library") } }
     }
 
     val reading = books.filter { it.status == ReadStatus.READING }

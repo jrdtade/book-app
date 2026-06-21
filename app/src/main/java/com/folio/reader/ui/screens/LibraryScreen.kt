@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items as lazyRowItems
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -43,12 +45,15 @@ import com.folio.reader.ui.folioViewModel
 import com.folio.reader.ui.theme.Ink3
 
 private enum class LibFilter(val label: String) { ALL("All"), READING("Reading"), FINISHED("Finished"), WANT("Want to read") }
+private const val ALL_SHELVES = "__all__"
 
 @Composable
 fun LibraryScreen(openBook: (String) -> Unit) {
     val vm: com.folio.reader.ui.LibraryViewModel = folioViewModel()
     val books by vm.books.collectAsState()
+    val collections by vm.collections.collectAsState()
     var filter by remember { mutableStateOf(LibFilter.ALL) }
+    var shelf by remember { mutableStateOf(ALL_SHELVES) }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let { vm.importEpub(it) }
     }
@@ -58,7 +63,7 @@ fun LibraryScreen(openBook: (String) -> Unit) {
         LibFilter.READING -> books.filter { it.status == ReadStatus.READING }
         LibFilter.FINISHED -> books.filter { it.status == ReadStatus.FINISHED }
         LibFilter.WANT -> books.filter { it.status == ReadStatus.WANT }
-    }
+    }.let { list -> if (shelf == ALL_SHELVES) list else list.filter { it.collectionId == shelf } }
 
     Scaffold(
         floatingActionButton = {
@@ -78,6 +83,21 @@ fun LibraryScreen(openBook: (String) -> Unit) {
             ) {
                 LibFilter.entries.forEach { f ->
                     FilterChip(selected = filter == f, onClick = { filter = f }, label = { Text(f.label) })
+                }
+            }
+            if (collections.isNotEmpty()) {
+                Spacer(Modifier.height(8.dp))
+                LazyRow(
+                    Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    item {
+                        FilterChip(selected = shelf == ALL_SHELVES, onClick = { shelf = ALL_SHELVES }, label = { Text("All shelves") })
+                    }
+                    lazyRowItems(collections, key = { it.id }) { c ->
+                        FilterChip(selected = shelf == c.id, onClick = { shelf = c.id }, label = { Text(c.name) })
+                    }
                 }
             }
             Spacer(Modifier.height(8.dp))
