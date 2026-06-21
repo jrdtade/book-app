@@ -8,7 +8,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
 /**
- * Intercepts 403/503 errors and launches [AuthWebViewActivity] to solve challenges.
+ * Intercepts 403/503 errors and Cloudflare challenges to launch [AuthWebViewActivity].
  */
 class BypassInterceptor(private val context: Context) : Interceptor {
     
@@ -16,8 +16,10 @@ class BypassInterceptor(private val context: Context) : Interceptor {
         val originalRequest = chain.request()
         val response = chain.proceed(originalRequest)
 
-        // 403 Forbidden or 503 Service Unavailable (often Cloudflare)
-        if (response.code == 403 || response.code == 503) {
+        // Detect Cloudflare/DDoS protection even if it returns 200 OK
+        val isChallenge = response.code == 403 || response.code == 503 || isChallengeBody(response)
+
+        if (isChallenge) {
             response.close()
 
             val latch = CountDownLatch(1)
@@ -41,5 +43,13 @@ class BypassInterceptor(private val context: Context) : Interceptor {
         }
 
         return response
+    }
+
+    private fun isChallengeBody(response: Response): Boolean {
+        val body = response.peekBody(1024 * 64).string().lowercase()
+        return body.contains("checking your browser") || 
+               body.contains("cf-browser-verification") ||
+               body.contains("captcha") ||
+               body.contains("ray id:")
     }
 }
