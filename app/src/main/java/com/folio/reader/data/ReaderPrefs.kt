@@ -21,7 +21,8 @@ data class ReaderPrefs(
     val lineHeight: Float = 1.5f,
     val margin: Int = 28,
     val bold: Boolean = false,
-    val justify: Boolean = true,
+    /** "left", "justify", "center", or "right". */
+    val align: String = "left",
     val brightness: Float = 1f,
     val warmth: Float = 0f,
     val flip: PageFlip = PageFlip.SLIDE,
@@ -37,6 +38,8 @@ object PrefKeys {
     val LH = floatPreferencesKey("lh")
     val MARGIN = intPreferencesKey("margin")
     val BOLD = booleanPreferencesKey("bold")
+    val ALIGN = stringPreferencesKey("align")
+    /** Superseded by ALIGN; kept only to migrate values saved by older builds. */
     val JUSTIFY = booleanPreferencesKey("justify")
     val BRIGHTNESS = floatPreferencesKey("brightness")
     val WARMTH = floatPreferencesKey("warmth")
@@ -54,7 +57,7 @@ class ReaderPrefsRepository(private val context: Context) {
             lineHeight = p[PrefKeys.LH] ?: 1.5f,
             margin = p[PrefKeys.MARGIN] ?: 28,
             bold = p[PrefKeys.BOLD] ?: false,
-            justify = p[PrefKeys.JUSTIFY] ?: true,
+            align = p[PrefKeys.ALIGN] ?: (if (p[PrefKeys.JUSTIFY] == true) "justify" else "left"),
             brightness = p[PrefKeys.BRIGHTNESS] ?: 1f,
             warmth = p[PrefKeys.WARMTH] ?: 0f,
             flip = runCatching { PageFlip.valueOf(p[PrefKeys.FLIP] ?: "SLIDE") }.getOrDefault(PageFlip.SLIDE),
@@ -71,7 +74,7 @@ class ReaderPrefsRepository(private val context: Context) {
             p[PrefKeys.LH] = prefs.lineHeight
             p[PrefKeys.MARGIN] = prefs.margin
             p[PrefKeys.BOLD] = prefs.bold
-            p[PrefKeys.JUSTIFY] = prefs.justify
+            p[PrefKeys.ALIGN] = prefs.align
             p[PrefKeys.BRIGHTNESS] = prefs.brightness
             p[PrefKeys.WARMTH] = prefs.warmth
             p[PrefKeys.FLIP] = prefs.flip.name

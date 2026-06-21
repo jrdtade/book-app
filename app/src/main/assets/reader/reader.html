@@ -35,12 +35,17 @@
   .warm-veil, .dim-veil { position:absolute; inset:0; pointer-events:none; transition:opacity .2s; }
   .warm-veil { background:#c98a2e; mix-blend-mode:multiply; opacity:0; z-index:5; }
   .dim-veil { background:#000; opacity:0; z-index:6; }
+  #pageNum {
+    position:absolute; left:0; right:0; bottom:14px; text-align:center;
+    font-size:12px; letter-spacing:.02em; opacity:0.55; pointer-events:none; z-index:3;
+  }
 </style>
 </head>
 <body>
   <div id="stage">
     <div id="shifter"><div id="content"></div></div>
     <div id="scrollContent" style="display:none"></div>
+    <div id="pageNum"></div>
     <div id="edge"></div>
     <div class="warm-veil" id="warmVeil"></div>
     <div class="dim-veil" id="dimVeil"></div>
@@ -79,6 +84,9 @@
     sc.style.display = prefs.scroll ? 'block' : 'none';
     document.getElementById('warmVeil').style.opacity = (prefs.warmth || 0) * 0.22;
     document.getElementById('dimVeil').style.opacity = (1 - (prefs.brightness == null ? 1 : prefs.brightness)) * 0.85;
+    var pn = document.getElementById('pageNum');
+    pn.style.color = prefs.fg;
+    pn.style.fontFamily = prefs.font;
     relayout();
   }
 
@@ -142,6 +150,8 @@
   function setPendingFraction(frac) { pendingFraction = frac; }
 
   function report() {
+    var pn = document.getElementById('pageNum');
+    pn.textContent = (mode === 'paged' && total > 1) ? (page + 1) + ' / ' + total : '';
     if (window.FolioBridge) window.FolioBridge.onState(page, total);
   }
 
