@@ -1,6 +1,7 @@
 package com.folio.reader.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,23 +12,35 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -44,12 +57,19 @@ import com.folio.reader.ui.theme.Ink3
 import com.folio.reader.ui.theme.Paper3
 
 @Composable
-fun DetailScreen(bookId: String, back: () -> Unit, openReader: () -> Unit) {
+fun DetailScreen(bookId: String, back: () -> Unit, openReader: () -> Unit, openCoverPicker: () -> Unit = {}) {
     val vm: LibraryViewModel = folioViewModel()
     val books by vm.books.collectAsState()
     val book = books.firstOrNull { it.id == bookId } ?: run {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Book not found") }
         return
+    }
+
+    LaunchedEffect(book.id) { vm.fetchSynopsis(book) }
+
+    var showShelfDialog by remember { mutableStateOf(false) }
+    if (showShelfDialog) {
+        ShelfPickerDialog(bookId = book.id, onDismiss = { showShelfDialog = false })
     }
 
     LazyColumn(Modifier.fillMaxSize()) {
@@ -61,7 +81,17 @@ fun DetailScreen(bookId: String, back: () -> Unit, openReader: () -> Unit) {
                 Modifier.fillMaxWidth().padding(24.dp, 12.dp, 24.dp, 22.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Cover(book, width = 172.dp)
+                Box {
+                    Cover(book, width = 172.dp)
+                    IconButton(
+                        onClick = openCoverPicker,
+                        modifier = Modifier.align(Alignment.BottomEnd)
+                            .padding(4.dp)
+                            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(50)),
+                    ) {
+                        Icon(Icons.Filled.Image, contentDescription = "Change cover", tint = Blue)
+                    }
+                }
                 Spacer(Modifier.height(22.dp))
                 Text(book.title, style = MaterialTheme.typography.headlineMedium, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                 Spacer(Modifier.height(5.dp))
@@ -69,6 +99,26 @@ fun DetailScreen(bookId: String, back: () -> Unit, openReader: () -> Unit) {
                 Spacer(Modifier.height(14.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Meta("${book.chapterCount} chapters")
+                }
+            }
+        }
+
+        item {
+            ShelvesRow(bookId = book.id, onManage = { showShelfDialog = true })
+        }
+
+        item {
+            Column(Modifier.padding(24.dp, 4.dp, 24.dp, 0.dp)) {
+                Text("SYNOPSIS", color = Ink3, style = MaterialTheme.typography.labelMedium)
+                Spacer(Modifier.height(8.dp))
+                when {
+                    book.synopsis != null -> Text(book.synopsis!!, style = MaterialTheme.typography.bodyMedium)
+                    book.synopsisFetchFailed -> Text("No synopsis found online.", color = Ink3, style = MaterialTheme.typography.bodyMedium)
+                    else -> Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Fetching synopsis…", color = Ink3, style = MaterialTheme.typography.bodyMedium)
+                    }
                 }
             }
         }
@@ -162,4 +212,69 @@ private fun DRow(k: String, v: String, last: Boolean = false) {
         Text(k, color = Ink3)
         Text(v, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
     }
+}
+
+@Composable
+private fun ShelvesRow(bookId: String, onManage: () -> Unit) {
+    val vm: LibraryViewModel = folioViewModel()
+    val collections by vm.collections.collectAsState()
+    val myCollectionIds by vm.collectionIdsForBook(bookId).collectAsState(initial = emptyList())
+    val myShelves = collections.filter { it.id in myCollectionIds }
+
+    Column(Modifier.padding(24.dp, 4.dp, 24.dp, 0.dp)) {
+        Text("SHELVES", color = Ink3, style = MaterialTheme.typography.labelMedium)
+        Spacer(Modifier.height(8.dp))
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            myShelves.forEach { shelf ->
+                Box(Modifier.background(Paper3, RoundedCornerShape(9.dp)).padding(11.dp, 5.dp)) {
+                    Text(shelf.name, color = Ink2, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+            IconButton(onClick = onManage, modifier = Modifier.size(28.dp)) {
+                Icon(Icons.Filled.Add, contentDescription = "Add to shelf", tint = Blue)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ShelfPickerDialog(bookId: String, onDismiss: () -> Unit) {
+    val vm: LibraryViewModel = folioViewModel()
+    val collections by vm.collections.collectAsState()
+    val myCollectionIds by vm.collectionIdsForBook(bookId).collectAsState(initial = emptyList())
+    var newShelfName by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Shelves") },
+        text = {
+            Column {
+                collections.forEach { shelf ->
+                    val inShelf = shelf.id in myCollectionIds
+                    FilterChip(
+                        selected = inShelf,
+                        onClick = { vm.toggleBookInCollection(bookId, shelf.id, inShelf) },
+                        label = { Text(shelf.name) },
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = newShelfName,
+                        onValueChange = { newShelfName = it },
+                        label = { Text("New shelf") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                    IconButton(onClick = {
+                        vm.createCollection(newShelfName)
+                        newShelfName = ""
+                    }) { Icon(Icons.Filled.Add, contentDescription = "Create shelf") }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
+    )
 }

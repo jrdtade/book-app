@@ -1,21 +1,33 @@
 package com.folio.reader.data
 
 import android.content.Context
+import android.graphics.BitmapFactory
 import android.net.Uri
 import com.folio.reader.epub.EpubParser
+import com.folio.reader.network.CoverCandidate
+import com.folio.reader.network.GoogleBooksApi
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.withContext
 import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
+import java.util.UUID
 
 class BookRepository(private val context: Context) {
     private val db = FolioDatabase.get(context)
     val bookDao = db.bookDao()
     val highlightDao = db.highlightDao()
     val sessionDao = db.sessionDao()
+    val collectionDao = db.collectionDao()
 
     fun observeBooks(): Flow<List<Book>> = bookDao.observeAll()
     fun observeBook(id: String): Flow<Book?> = bookDao.observe(id)
     fun observeHighlights(): Flow<List<Highlight>> = highlightDao.observeAll()
     fun observeSessions(): Flow<List<ReadingSession>> = sessionDao.observeAll()
+    fun observeCollections(): Flow<List<Shelf>> = collectionDao.observeAll()
+    fun observeCollectionIdsForBook(bookId: String): Flow<List<String>> = collectionDao.observeCollectionIdsForBook(bookId)
+    fun observeBookIdsInCollection(collectionId: String): Flow<List<String>> = collectionDao.observeBookIdsInCollection(collectionId)
 
     suspend fun importEpub(uri: Uri): Book {
         val parsed = EpubParser.import(context, uri)
@@ -49,6 +61,56 @@ class BookRepository(private val context: Context) {
     }
 
     suspend fun addHighlight(highlight: Highlight) = highlightDao.insert(highlight)
+
+    suspend fun fetchSynopsis(book: Book) {
+        val synopsis = GoogleBooksApi.fetchSynopsis(book.title, book.author)
+        bookDao.update(book.copy(synopsis = synopsis, synopsisFetchFailed = synopsis == null))
+    }
+
+    suspend fun searchCoverCandidates(query: String): List<CoverCandidate> = GoogleBooksApi.searchCovers(query)
+
+    /** Downloads the chosen cover image into the book's own content directory and
+     *  points the book at it, replacing whatever cover (or typographic fallback) it had. */
+    suspend fun applyCover(book: Book, imageUrl: String) = withContext(Dispatchers.IO) {
+        val bytes = downloadBytes(imageUrl) ?: return@withContext
+        val fileName = "cover_${UUID.randomUUID()}.jpg"
+        val file = File(book.contentDir, fileName)
+        file.writeBytes(bytes)
+        bookDao.update(book.copy(coverPath = fileName))
+    }
+
+    private fun downloadBytes(imageUrl: String): ByteArray? {
+        val connection = URL(imageUrl).openConnection() as HttpURLConnection
+        return try {
+            connection.connectTimeout = 10_000
+            connection.readTimeout = 10_000
+            if (connection.responseCode != HttpURLConnection.HTTP_OK) return null
+            val bytes = connection.inputStream.use { it.readBytes() }
+            // Make sure we actually got a decodable image before committing to it.
+            if (BitmapFactory.decodeByteArray(bytes, 0, bytes.size) == null) null else bytes
+        } catch (_: Exception) {
+            null
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    suspend fun createCollection(name: String): Shelf {
+        val shelf = Shelf(id = UUID.randomUUID().toString(), name = name)
+        collectionDao.insert(shelf)
+        return shelf
+    }
+
+    suspend fun deleteCollection(shelf: Shelf) {
+        collectionDao.clearMembers(shelf.id)
+        collectionDao.delete(shelf)
+    }
+
+    suspend fun addBookToCollection(bookId: String, collectionId: String) =
+        collectionDao.addBook(BookCollectionCrossRef(bookId, collectionId))
+
+    suspend fun removeBookFromCollection(bookId: String, collectionId: String) =
+        collectionDao.removeBook(bookId, collectionId)
 
     companion object {
         // long ARGB pairs used for the typographic cover gradient.

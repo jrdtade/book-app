@@ -1,5 +1,7 @@
 package com.folio.reader
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -19,7 +21,12 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
@@ -28,6 +35,8 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.navigation.NavType
+import com.folio.reader.ui.LibraryViewModel
+import com.folio.reader.ui.folioViewModel
 import com.folio.reader.ui.screens.DetailScreen
 import com.folio.reader.ui.screens.HomeScreen
 import com.folio.reader.ui.screens.LibraryScreen
@@ -46,22 +55,59 @@ sealed class Tab(val route: String, val label: String) {
 private val tabs = listOf(Tab.Reading, Tab.Library, Tab.Stats, Tab.Settings)
 
 class MainActivity : ComponentActivity() {
+    var pendingImportUri by mutableStateOf<Uri?>(null)
+
     @androidx.compose.material3.ExperimentalMaterial3Api
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        pendingImportUri = importUriFromIntent(intent)
         setContent {
             FolioTheme {
-                FolioAppRoot()
+                FolioAppRoot(
+                    pendingImportUri = pendingImportUri,
+                    onPendingImportConsumed = { pendingImportUri = null },
+                )
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        importUriFromIntent(intent)?.let { pendingImportUri = it }
+    }
+
+    /** A book opened from another app (e.g. a WhatsApp attachment) arrives either as
+     *  ACTION_VIEW with the file as the intent data, or ACTION_SEND with it as EXTRA_STREAM. */
+    private fun importUriFromIntent(intent: Intent?): Uri? = when (intent?.action) {
+        Intent.ACTION_VIEW -> intent.data
+        Intent.ACTION_SEND -> @Suppress("DEPRECATION") intent.getParcelableExtra(Intent.EXTRA_STREAM)
+        else -> null
     }
 }
 
 @androidx.compose.material3.ExperimentalMaterial3Api
 @Composable
-fun FolioAppRoot() {
+fun FolioAppRoot(
+    pendingImportUri: Uri? = null,
+    onPendingImportConsumed: () -> Unit = {},
+) {
     val navController = rememberNavController()
+    val libraryViewModel: LibraryViewModel = folioViewModel()
+
+    LaunchedEffect(pendingImportUri) {
+        val uri = pendingImportUri ?: return@LaunchedEffect
+        libraryViewModel.importEpub(uri) {
+            navController.navigate(Tab.Library.route) {
+                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                launchSingleTop = true
+                restoreState = true
+            }
+        }
+        onPendingImportConsumed()
+    }
+
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
     val showTabBar = currentRoute == null || tabs.any { it.route == currentRoute }
@@ -126,6 +172,7 @@ fun FolioAppRoot() {
                     bookId = id,
                     back = { navController.popBackStack() },
                     openReader = { navController.navigate("reader/$id") },
+                    openCoverPicker = { navController.navigate("cover_picker/$id") },
                 )
             }
             composable(
@@ -134,6 +181,16 @@ fun FolioAppRoot() {
             ) { entry ->
                 val id = entry.arguments?.getString("bookId") ?: return@composable
                 ReaderScreen(bookId = id, back = { navController.popBackStack() })
+            }
+            composable(
+                "cover_picker/{bookId}",
+                arguments = listOf(navArgument("bookId") { type = NavType.StringType }),
+            ) { entry ->
+                val id = entry.arguments?.getString("bookId") ?: return@composable
+                val book = libraryViewModel.books.collectAsState().value.firstOrNull { it.id == id }
+                if (book != null) {
+                    com.folio.reader.ui.screens.CoverPickerScreen(book = book, back = { navController.popBackStack() })
+                }
             }
         }
     }

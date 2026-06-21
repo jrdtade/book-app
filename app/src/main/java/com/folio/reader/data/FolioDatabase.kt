@@ -15,8 +15,8 @@ class Converters {
 }
 
 @Database(
-    entities = [Book::class, Highlight::class, ReadingSession::class],
-    version = 1,
+    entities = [Book::class, Highlight::class, ReadingSession::class, Shelf::class, BookCollectionCrossRef::class],
+    version = 2,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -24,6 +24,7 @@ abstract class FolioDatabase : RoomDatabase() {
     abstract fun bookDao(): BookDao
     abstract fun highlightDao(): HighlightDao
     abstract fun sessionDao(): SessionDao
+    abstract fun collectionDao(): CollectionDao
 
     companion object {
         @Volatile private var instance: FolioDatabase? = null
@@ -33,7 +34,10 @@ abstract class FolioDatabase : RoomDatabase() {
                 context.applicationContext,
                 FolioDatabase::class.java,
                 "folio.db",
-            ).build().also { instance = it }
+            )
+                // Pre-release schema churn (synopsis cache, collections); no installs to preserve yet.
+                .fallbackToDestructiveMigration()
+                .build().also { instance = it }
         }
     }
 }
