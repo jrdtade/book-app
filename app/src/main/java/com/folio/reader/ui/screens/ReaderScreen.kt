@@ -8,6 +8,7 @@ import android.webkit.WebView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,10 +20,17 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.FormatAlignLeft
+import androidx.compose.material.icons.automirrored.filled.FormatAlignRight
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.FormatAlignCenter
+import androidx.compose.material.icons.filled.FormatAlignJustify
+import androidx.compose.material.icons.filled.FormatLineSpacing
 import androidx.compose.material.icons.filled.FormatSize
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.WbSunny
@@ -45,6 +53,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
@@ -115,12 +124,14 @@ fun ReaderScreen(bookId: String, back: () -> Unit) {
             put("font", when (p.font) {
                 "sans" -> "sans-serif"
                 "mono" -> "monospace"
+                "condensed" -> "sans-serif-condensed"
+                "rounded" -> "sans-serif-rounded"
                 else -> "serif"
             })
             put("size", p.size)
             put("lh", p.lineHeight)
             put("weight", if (p.bold) "600" else "400")
-            put("align", if (p.justify) "justify" else "left")
+            put("align", p.align)
             put("mx", p.margin)
             put("warmth", p.warmth)
             put("brightness", p.brightness)
@@ -248,6 +259,23 @@ fun ReaderScreen(bookId: String, back: () -> Unit) {
     }
 }
 
+private data class FontOption(val id: String, val label: String, val preview: androidx.compose.ui.text.font.FontFamily)
+
+private val FontOptions = listOf(
+    FontOption("serif", "Serif", androidx.compose.ui.text.font.FontFamily.Serif),
+    FontOption("sans", "Sans", androidx.compose.ui.text.font.FontFamily.SansSerif),
+    FontOption("condensed", "Condensed", androidx.compose.ui.text.font.FontFamily.SansSerif),
+    FontOption("rounded", "Rounded", androidx.compose.ui.text.font.FontFamily.SansSerif),
+    FontOption("mono", "Mono", androidx.compose.ui.text.font.FontFamily.Monospace),
+)
+
+private val AlignOptions = listOf(
+    "left" to Icons.AutoMirrored.Filled.FormatAlignLeft,
+    "justify" to Icons.Filled.FormatAlignJustify,
+    "center" to Icons.Filled.FormatAlignCenter,
+    "right" to Icons.AutoMirrored.Filled.FormatAlignRight,
+)
+
 @androidx.compose.material3.ExperimentalMaterial3Api
 @Composable
 private fun ReaderSettingsSheet(
@@ -256,12 +284,13 @@ private fun ReaderSettingsSheet(
     onChange: (ReaderPrefs) -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState()
+    val outline = MaterialTheme.colorScheme.outline
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        Column(Modifier.padding(20.dp, 4.dp, 20.dp, 32.dp)) {
+        Column(Modifier.padding(20.dp, 4.dp, 20.dp, 32.dp).verticalScroll(rememberScrollState())) {
             Text("Display", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(16.dp))
 
-            Text("THEME", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.outline)
+            Text("THEME", style = MaterialTheme.typography.labelMedium, color = outline)
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 ReaderThemes.forEach { theme ->
@@ -280,50 +309,120 @@ private fun ReaderSettingsSheet(
                 }
             }
 
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(22.dp))
             Divider()
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(18.dp))
 
-            Text("FONT", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.outline)
-            Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                listOf("serif" to "Serif", "sans" to "Sans", "mono" to "Mono").forEach { (id, label) ->
-                    androidx.compose.material3.FilterChip(
-                        selected = prefs.font == id,
-                        onClick = { onChange(prefs.copy(font = id)) },
-                        label = { Text(label) },
-                    )
+            Text("FONT", style = MaterialTheme.typography.labelMedium, color = outline)
+            Spacer(Modifier.height(10.dp))
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                FontOptions.forEach { option ->
+                    val selected = prefs.font == option.id
+                    Column(
+                        Modifier
+                            .width(62.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                            .border(
+                                width = if (selected) 1.5.dp else 0.dp,
+                                color = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                                shape = RoundedCornerShape(14.dp),
+                            )
+                            .clickable { onChange(prefs.copy(font = option.id)) }
+                            .padding(vertical = 12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text(
+                            "Aa",
+                            fontFamily = option.preview,
+                            style = MaterialTheme.typography.titleLarge,
+                            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            option.label,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (selected) MaterialTheme.colorScheme.primary else outline,
+                        )
+                    }
                 }
             }
 
             Spacer(Modifier.height(20.dp))
-            Text("TEXT SIZE", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.outline)
-            Slider(
-                value = prefs.size.toFloat(),
-                onValueChange = { onChange(prefs.copy(size = it.toInt())) },
-                valueRange = 14f..30f,
-                steps = 7,
-            )
+            Text("TEXT SIZE", style = MaterialTheme.typography.labelMedium, color = outline)
+            Spacer(Modifier.height(2.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("A", style = MaterialTheme.typography.bodySmall, color = outline)
+                Slider(
+                    value = prefs.size.toFloat(),
+                    onValueChange = { onChange(prefs.copy(size = it.toInt())) },
+                    valueRange = 14f..30f,
+                    steps = 7,
+                    modifier = Modifier.weight(1f),
+                )
+                Text("A", style = MaterialTheme.typography.headlineSmall, color = outline)
+            }
 
-            Text("LINE SPACING", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.outline)
-            Slider(
-                value = prefs.lineHeight,
-                onValueChange = { onChange(prefs.copy(lineHeight = it)) },
-                valueRange = 1.2f..2.2f,
-            )
+            Text("LINE SPACING", style = MaterialTheme.typography.labelMedium, color = outline)
+            Spacer(Modifier.height(2.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Icon(Icons.Filled.FormatLineSpacing, contentDescription = null, tint = outline, modifier = Modifier.size(16.dp))
+                Slider(
+                    value = prefs.lineHeight,
+                    onValueChange = { onChange(prefs.copy(lineHeight = it)) },
+                    valueRange = 1.2f..2.2f,
+                    modifier = Modifier.weight(1f),
+                )
+                Icon(Icons.Filled.FormatLineSpacing, contentDescription = null, tint = outline, modifier = Modifier.size(26.dp))
+            }
 
-            Text("MARGINS", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.outline)
-            Slider(
-                value = prefs.margin.toFloat(),
-                onValueChange = { onChange(prefs.copy(margin = it.toInt())) },
-                valueRange = 12f..56f,
-            )
+            Text("MARGINS", style = MaterialTheme.typography.labelMedium, color = outline)
+            Spacer(Modifier.height(2.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Box(Modifier.size(10.dp).border(1.dp, outline, RoundedCornerShape(2.dp)))
+                Slider(
+                    value = prefs.margin.toFloat(),
+                    onValueChange = { onChange(prefs.copy(margin = it.toInt())) },
+                    valueRange = 12f..56f,
+                    modifier = Modifier.weight(1f),
+                )
+                Box(Modifier.size(20.dp).border(1.dp, outline, RoundedCornerShape(3.dp)))
+            }
 
+            Spacer(Modifier.height(14.dp))
+            Text("ALIGNMENT", style = MaterialTheme.typography.labelMedium, color = outline)
             Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                AlignOptions.forEach { (id, icon) ->
+                    val selected = prefs.align == id
+                    Box(
+                        Modifier
+                            .size(44.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else Color.Transparent)
+                            .clickable { onChange(prefs.copy(align = id)) },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            icon,
+                            contentDescription = id,
+                            tint = if (selected) MaterialTheme.colorScheme.primary else outline,
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(20.dp))
+            Divider()
+            Spacer(Modifier.height(16.dp))
+
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.WbSunny, contentDescription = null, tint = MaterialTheme.colorScheme.outline)
+                Icon(Icons.Filled.WbSunny, contentDescription = null, tint = outline)
                 Spacer(Modifier.width(10.dp))
-                Text("WARMTH", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.outline)
+                Text("WARMTH", style = MaterialTheme.typography.labelMedium, color = outline)
             }
             Slider(
                 value = prefs.warmth,
@@ -331,7 +430,7 @@ private fun ReaderSettingsSheet(
                 valueRange = 0f..1f,
             )
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 PageFlip.entries.forEach { flip ->
                     androidx.compose.material3.FilterChip(
@@ -344,22 +443,13 @@ private fun ReaderSettingsSheet(
 
             Spacer(Modifier.height(8.dp))
             Row(
-                Modifier.fillMaxWidth().clickable { onChange(prefs.copy(justify = !prefs.justify)) },
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("Justified text", style = MaterialTheme.typography.bodyLarge)
-                androidx.compose.material3.Switch(checked = prefs.justify, onCheckedChange = { onChange(prefs.copy(justify = it)) })
-            }
-
-            Row(
                 Modifier.fillMaxWidth().clickable { onChange(prefs.copy(tapToTurn = !prefs.tapToTurn)) },
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {
                     Text("Tap edges to turn", style = MaterialTheme.typography.bodyLarge)
-                    Text("Swipe always works", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                    Text("Swipe always works", style = MaterialTheme.typography.bodySmall, color = outline)
                 }
                 androidx.compose.material3.Switch(checked = prefs.tapToTurn, onCheckedChange = { onChange(prefs.copy(tapToTurn = it)) })
             }

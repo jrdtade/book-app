@@ -15,6 +15,7 @@
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTask"
+            android:taskAffinity=""
             android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.Folio">
             <intent-filter>
@@ -36,6 +37,11 @@
                 <data android:scheme="file" />
                 <data android:host="*" />
                 <data android:pathPattern=".*\\.epub" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/epub+zip" />
             </intent-filter>
         </activity>
     </application>

@@ -27,8 +27,8 @@ private val MIGRATION_1_2 = object : Migration(1, 2) {
 }
 
 @Database(
-    entities = [Book::class, Highlight::class, ReadingSession::class, BookCollection::class],
-    version = 2,
+    entities = [Book::class, Highlight::class, ReadingSession::class, Shelf::class, BookCollectionCrossRef::class],
+    version = 3,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -46,7 +46,10 @@ abstract class FolioDatabase : RoomDatabase() {
                 context.applicationContext,
                 FolioDatabase::class.java,
                 "folio.db",
-            ).addMigrations(MIGRATION_1_2).build().also { instance = it }
+            )
+                // Pre-release schema churn (synopsis cache, collections); no installs to preserve yet.
+                .fallbackToDestructiveMigration()
+                .build().also { instance = it }
         }
     }
 }
