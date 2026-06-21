@@ -1,5 +1,6 @@
 package com.folio.reader.network
 
+import android.util.Log
 import com.folio.reader.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -20,12 +21,16 @@ data class BookClassification(
  *  genre/tags and look up its synopsis and publication date from its title/author.
  *  Asks for a strict JSON response so no free-text parsing is needed. */
 object GeminiApi {
+    private const val TAG = "GeminiApi"
     private const val MODEL = "gemini-2.0-flash"
     private const val ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/$MODEL:generateContent"
 
     suspend fun classify(title: String, author: String): BookClassification? = withContext(Dispatchers.IO) {
         val apiKey = BuildConfig.GEMINI_API_KEY
-        if (apiKey.isBlank()) return@withContext null
+        if (apiKey.isBlank()) {
+            Log.w(TAG, "GEMINI_API_KEY is blank in local.properties; skipping classification")
+            return@withContext null
+        }
 
         val prompt = "Book title: \"$title\" by $author. " +
             "Reply with ONLY a JSON object of the form " +
@@ -76,10 +81,15 @@ object GeminiApi {
             connection.setRequestProperty("Content-Type", "application/json")
             connection.doOutput = true
             connection.outputStream.use { it.write(body.toString().toByteArray()) }
-            if (connection.responseCode != HttpURLConnection.HTTP_OK) return null
+            if (connection.responseCode != HttpURLConnection.HTTP_OK) {
+                val errorBody = connection.errorStream?.bufferedReader()?.use { it.readText() }
+                Log.e(TAG, "Gemini request failed: HTTP ${connection.responseCode} - $errorBody")
+                return null
+            }
             val responseBody = connection.inputStream.bufferedReader().use { it.readText() }
             JSONObject(responseBody)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.e(TAG, "Gemini request threw an exception", e)
             null
         } finally {
             connection.disconnect()

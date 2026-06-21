@@ -20,12 +20,14 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -57,6 +59,7 @@ fun HomeScreen(
     openBook: (String) -> Unit,
     openReader: (String) -> Unit,
     goToTab: (String) -> Unit,
+    openProfile: () -> Unit = {},
 ) {
     val vm: com.folio.reader.ui.LibraryViewModel = folioViewModel()
     val books by vm.books.collectAsState()
@@ -73,14 +76,22 @@ fun HomeScreen(
         contentPadding = PaddingValues(bottom = 24.dp),
     ) {
         item {
-            Column(Modifier.padding(20.dp, 28.dp, 20.dp, 6.dp)) {
-                Text(
-                    "FOLIO · ${today.uppercase()}",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = Ink3,
-                )
-                Spacer(Modifier.height(6.dp))
-                Text("Good day,\nReader.", style = MaterialTheme.typography.headlineLarge)
+            Row(
+                Modifier.fillMaxWidth().padding(20.dp, 28.dp, 12.dp, 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column {
+                    Text(
+                        "FOLIO · ${today.uppercase()}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Ink3,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text("Good day,\nReader.", style = MaterialTheme.typography.headlineLarge)
+                }
+                IconButton(onClick = openProfile) {
+                    Icon(Icons.Filled.AccountCircle, contentDescription = "Profile & settings", tint = Ink3)
+                }
             }
         }
 

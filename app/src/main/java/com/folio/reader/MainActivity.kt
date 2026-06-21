@@ -6,12 +6,15 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.calculateCurrentOffsetForPage
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
@@ -19,12 +22,10 @@ import androidx.compose.material.icons.filled.Equalizer
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.outlined.LibraryBooks
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -149,18 +150,6 @@ fun FolioAppRoot(
     val showTabBar = currentRoute == null || currentRoute == TABS_ROUTE
 
     Scaffold(
-        topBar = {
-            if (showTabBar) {
-                TopAppBar(
-                    title = {},
-                    actions = {
-                        IconButton(onClick = { navigateToTab(Tab.Settings.route) }) {
-                            Icon(Icons.Filled.AccountCircle, contentDescription = "Profile & settings")
-                        }
-                    },
-                )
-            }
-        },
         bottomBar = {
             if (showTabBar) {
                 NavigationBar {
@@ -196,16 +185,34 @@ fun FolioAppRoot(
             modifier = Modifier.padding(if (showTabBar) padding else PaddingValues(0.dp)),
         ) {
             composable(TABS_ROUTE) {
-                HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
-                    when (tabs[page]) {
-                        Tab.Reading -> HomeScreen(
-                            openBook = { id -> navController.navigate("detail/$id") },
-                            openReader = { id -> navController.navigate("reader/$id") },
-                            goToTab = { route -> navigateToTab(route) },
-                        )
-                        Tab.Library -> LibraryScreen(openBook = { id -> navController.navigate("detail/$id") })
-                        Tab.Stats -> StatsScreen()
-                        else -> Unit
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.fillMaxSize(),
+                ) { page ->
+                    val offset = pagerState.calculateCurrentOffsetForPage(page)
+                    val absOffset = offset.coerceIn(-1f, 1f).let { if (it < 0) -it else it }
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                alpha = 1f - (absOffset * 0.5f)
+                                val scale = 1f - (absOffset * 0.08f)
+                                scaleX = scale
+                                scaleY = scale
+                                translationX = size.width * offset * 0.08f
+                            },
+                    ) {
+                        when (tabs[page]) {
+                            Tab.Reading -> HomeScreen(
+                                openBook = { id -> navController.navigate("detail/$id") },
+                                openReader = { id -> navController.navigate("reader/$id") },
+                                goToTab = { route -> navigateToTab(route) },
+                                openProfile = { navigateToTab(Tab.Settings.route) },
+                            )
+                            Tab.Library -> LibraryScreen(openBook = { id -> navController.navigate("detail/$id") })
+                            Tab.Stats -> StatsScreen()
+                            else -> Unit
+                        }
                     }
                 }
             }
