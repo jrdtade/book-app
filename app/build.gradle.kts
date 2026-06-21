@@ -85,5 +85,11 @@ dependencies {
     // Pure-Java unrar implementation, used to read .cbr comic archives.
     implementation("com.github.junrar:junrar:7.5.5")
 
+    // Real Mihon/Keiyoushi extensions are compiled against extensions-lib, whose
+    // Source/CatalogueSource/HttpSource contracts return RxJava 1 Observables.
+    implementation("io.reactivex:rxjava:1.3.8")
+    // Referenced by extensions implementing ConfigurableSource (login/settings screens).
+    implementation("androidx.preference:preference-ktx:1.2.1")
+
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
