@@ -31,7 +31,7 @@ class BookRepository(
     val bookmarkDao = db.bookmarkDao()
     val sessionDao = db.sessionDao()
     val collectionDao = db.collectionDao()
-    val sourceRegistry = SourceRegistry(bookDao, extensionManager, scope)
+    val sourceRegistry = SourceRegistry(extensionManager, scope)
 
     fun observeBooks(): Flow<List<Book>> = bookDao.observeAll()
     fun observeBooksByType(mediaType: MediaType): Flow<List<Book>> = bookDao.observeByType(mediaType)

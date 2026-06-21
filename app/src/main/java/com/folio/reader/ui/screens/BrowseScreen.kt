@@ -208,7 +208,18 @@ private fun ExtensionRow(
     ListItem(
         headlineContent = { Text(extension.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
         supportingContent = {
-            Text("v${extension.version} • ${extension.lang}" + if (!extension.isInstalled) " • Available" else "")
+            Column {
+                Text("v${extension.version} • ${extension.lang}" + if (!extension.isInstalled) " • Available" else "")
+                if (extension.loadError != null) {
+                    Text(
+                        "Failed to load: ${extension.loadError}",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
         },
         trailingContent = {
             when {

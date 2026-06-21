@@ -43,6 +43,7 @@ fun SourceBrowseScreen(
     var items by remember { mutableStateOf<List<SourceMediaInfo>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var errored by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
     var query by remember(source.id) { mutableStateOf("") }
     var filters by remember(source.id) { mutableStateOf(source.getFilters()) }
     var showFilters by remember { mutableStateOf(false) }
@@ -53,11 +54,19 @@ fun SourceBrowseScreen(
         scope.launch {
             loading = true
             errored = false
+            errorMessage = null
             items = try {
                 if (query.isBlank()) source.fetchLatestUpdates() else source.search(query, filters)
-            } catch (e: Exception) {
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                // Catches Throwable, not just Exception: a hand-rolled Tachiyomi-API
+                // shim can mismatch a real extension's expectations in ways that
+                // surface as Error subtypes (NoSuchMethodError, AbstractMethodError),
+                // not just ordinary Exceptions — those shouldn't crash the screen either.
                 e.printStackTrace()
                 errored = true
+                errorMessage = e.message ?: e.javaClass.simpleName
                 emptyList()
             }
             loading = false
@@ -121,10 +130,12 @@ fun SourceBrowseScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            if (errored) {
-                                "No content found. The site might be under protection or the layout has changed."
-                            } else {
-                                "No results."
+                            when {
+                                errored && errorMessage != null ->
+                                    "Failed to load: $errorMessage"
+                                errored ->
+                                    "No content found. The site might be under protection or the layout has changed."
+                                else -> "No results."
                             },
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                             style = MaterialTheme.typography.bodyMedium

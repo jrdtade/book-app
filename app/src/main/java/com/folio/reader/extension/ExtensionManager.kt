@@ -2,6 +2,7 @@ package com.folio.reader.extension
 
 import android.content.Context
 import android.content.pm.PackageManager
+import android.util.Log
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringSetPreferencesKey
@@ -32,6 +33,8 @@ import eu.kanade.tachiyomi.source.SourceFactory as TachiyomiSourceFactory
 /** AndroidManifest `<application>` meta-data key real Tachiyomi/Mihon extension
  *  apks use to declare their entry point class(es). */
 private const val TACHIYOMI_EXTENSION_CLASS_META_KEY = "tachiyomi.extension.class"
+
+private const val TAG = "ExtensionManager"
 
 /** Persists which extensions the user has enabled and which repos they've added. */
 private val Context.extensionPrefs by preferencesDataStore(name = "extension_prefs")
@@ -89,6 +92,10 @@ data class Extension(
     val isInstalled: Boolean,
     val apkUrl: String? = null,
     val isInstalling: Boolean = false,
+    /** Set when this extension is enabled but its sources failed to load (bad apk,
+     *  a class our Tachiyomi shim doesn't fully support, etc.) — surfaced in the
+     *  UI so a failure isn't just "nothing shows up under Sources" with no clue why. */
+    val loadError: String? = null,
 )
 
 private data class DiscoveredExtension(val manifest: ExtensionManifest, val codeFile: File)
@@ -118,6 +125,7 @@ class ExtensionManager(
     private val discoveredFlow = MutableStateFlow<Map<String, DiscoveredExtension>>(emptyMap())
     private val remoteEntriesFlow = MutableStateFlow<List<RemoteExtensionEntry>>(emptyList())
     private val installingFlow = MutableStateFlow<Set<String>>(emptySet())
+    private val loadErrorFlow = MutableStateFlow<Map<String, String>>(emptyMap())
 
     /** Cached, already dynamically-loaded sources, by package name, so toggling an
      *  extension on and off doesn't reload its code every time. */
@@ -142,7 +150,8 @@ class ExtensionManager(
         context.extensionPrefs.data,
         remoteEntriesFlow,
         installingFlow,
-    ) { discovered, prefs, remoteEntries, installing ->
+        loadErrorFlow,
+    ) { discovered, prefs, remoteEntries, installing, loadErrors ->
         val installed = discovered.values.map { (manifest, _) ->
             Extension(
                 pkgName = manifest.pkgName,
@@ -153,6 +162,7 @@ class ExtensionManager(
                 isEnabled = prefs[enabledKey(manifest.pkgName)] ?: false,
                 isInstalled = true,
                 isInstalling = manifest.pkgName in installing,
+                loadError = loadErrors[manifest.pkgName],
             )
         }
 
@@ -283,7 +293,13 @@ class ExtensionManager(
             } else {
                 loadTachiyomiSources(discovered)
             }
-        }.onSuccess { sourcesCache[pkgName] = it }.getOrDefault(emptyList())
+        }.onSuccess { sources ->
+            sourcesCache[pkgName] = sources
+            loadErrorFlow.update { it - pkgName }
+        }.onFailure { e ->
+            Log.e(TAG, "Failed to load sources for $pkgName", e)
+            loadErrorFlow.update { it + (pkgName to (e.message ?: e.javaClass.simpleName)) }
+        }.getOrDefault(emptyList())
     }
 
     private fun obtainClassLoader(discovered: DiscoveredExtension): DexClassLoader =
@@ -326,12 +342,18 @@ class ExtensionManager(
         val classLoader = obtainClassLoader(discovered)
         return classNames.flatMap { rawName ->
             val className = if (rawName.startsWith(".")) realPkgName + rawName else rawName
-            val instance = classLoader.loadClass(className).getDeclaredConstructor().newInstance()
-            when (instance) {
-                is TachiyomiSourceFactory -> instance.createSources().map { TachiyomiSourceAdapter(it) }
-                is TachiyomiSource -> listOf(TachiyomiSourceAdapter(instance))
-                else -> emptyList()
-            }
+            // One multi-source extension declares several classes; a single one
+            // failing (e.g. a base class our shim doesn't fully replicate)
+            // shouldn't sink every other source the same apk also provides.
+            runCatching {
+                val instance = classLoader.loadClass(className).getDeclaredConstructor().newInstance()
+                when (instance) {
+                    is TachiyomiSourceFactory -> instance.createSources().map { TachiyomiSourceAdapter(it) }
+                    is TachiyomiSource -> listOf(TachiyomiSourceAdapter(instance))
+                    else -> emptyList()
+                }
+            }.onFailure { e -> Log.e(TAG, "Failed to instantiate $className", e) }
+                .getOrDefault(emptyList())
         }
     }
 
