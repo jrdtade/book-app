@@ -7,11 +7,14 @@ import com.folio.reader.FolioApp
 import com.folio.reader.data.Book
 import com.folio.reader.data.Shelf
 import com.folio.reader.data.ReadStatus
+import com.folio.reader.data.ReadingSession
+import com.folio.reader.network.BookRecommendation
 import com.folio.reader.network.CoverCandidate
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -21,6 +24,18 @@ class LibraryViewModel(private val app: FolioApp) : ViewModel() {
 
     val books: StateFlow<List<Book>> = repo.observeBooks()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val sessions: StateFlow<List<ReadingSession>> = repo.observeSessions()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val _recommendation = MutableStateFlow<BookRecommendation?>(null)
+    val recommendation: StateFlow<BookRecommendation?> = _recommendation.asStateFlow()
+
+    fun refreshRecommendation() {
+        viewModelScope.launch {
+            _recommendation.value = repo.getRecommendation(books.value, sessions.value)
+        }
+    }
 
     val collections: StateFlow<List<Shelf>> = repo.observeCollections()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())

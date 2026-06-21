@@ -57,11 +57,14 @@ fun LibraryScreen(openBook: (String) -> Unit) {
     val books by vm.books.collectAsState()
     val collections by vm.collections.collectAsState()
     var filter by remember { mutableStateOf(LibFilter.ALL) }
+    var selectedGenre by remember { mutableStateOf<String?>(null) }
     var selectedShelf by remember { mutableStateOf<Shelf?>(null) }
     var showNewShelfDialog by remember { mutableStateOf(false) }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let { vm.importEpub(it) }
     }
+
+    val genres = remember(books) { books.mapNotNull { it.genre }.distinct().sorted() }
 
     val shelfBookIds by (selectedShelf?.let { vm.bookIdsInCollection(it.id) } ?: kotlinx.coroutines.flow.flowOf(null))
         .collectAsState(initial = null)
@@ -76,7 +79,8 @@ fun LibraryScreen(openBook: (String) -> Unit) {
         LibFilter.FINISHED -> books.filter { it.status == ReadStatus.FINISHED }
         LibFilter.WANT -> books.filter { it.status == ReadStatus.WANT }
     }
-    val filtered = shelfBookIds?.let { ids -> statusFiltered.filter { it.id in ids } } ?: statusFiltered
+    val genreFiltered = if (selectedGenre != null) statusFiltered.filter { it.genre == selectedGenre } else statusFiltered
+    val filtered = shelfBookIds?.let { ids -> genreFiltered.filter { it.id in ids } } ?: genreFiltered
 
     Scaffold(
         floatingActionButton = {
@@ -90,15 +94,31 @@ fun LibraryScreen(openBook: (String) -> Unit) {
                 Text("${books.size} BOOKS", color = Ink3, style = MaterialTheme.typography.labelMedium)
                 Text("Library", style = MaterialTheme.typography.headlineLarge)
             }
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            LazyRow(
+                Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                LibFilter.entries.forEach { f ->
+                items(LibFilter.entries) { f ->
                     FilterChip(selected = filter == f, onClick = { filter = f }, label = { Text(f.label) })
                 }
             }
-            Spacer(Modifier.height(8.dp))
+            if (genres.isNotEmpty()) {
+                LazyRow(
+                    Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(genres) { g ->
+                        FilterChip(
+                            selected = selectedGenre == g,
+                            onClick = { selectedGenre = if (selectedGenre == g) null else g },
+                            label = { Text(g) }
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(4.dp))
             LazyRow(
                 contentPadding = PaddingValues(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),

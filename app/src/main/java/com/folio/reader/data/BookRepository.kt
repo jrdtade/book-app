@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.BitmapFactory
 import android.net.Uri
 import com.folio.reader.epub.EpubParser
+import com.folio.reader.network.BookRecommendation
 import com.folio.reader.network.CoverCandidate
 import com.folio.reader.network.GeminiApi
 import com.folio.reader.network.OpenLibraryApi
@@ -96,6 +97,10 @@ class BookRepository(private val context: Context) {
                 classificationFetchFailed = result == null,
             ),
         )
+    }
+
+    suspend fun getRecommendation(books: List<Book>, sessions: List<ReadingSession>): BookRecommendation? {
+        return GeminiApi.recommend(books, sessions)
     }
 
     suspend fun searchCoverCandidates(query: String): List<CoverCandidate> = OpenLibraryApi.searchCovers(query)

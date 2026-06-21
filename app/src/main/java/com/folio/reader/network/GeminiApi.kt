@@ -17,6 +17,11 @@ data class BookClassification(
     val publishedDate: String?,
 )
 
+data class BookRecommendation(
+    val bookId: String,
+    val reason: String,
+)
+
 /** Client for the Gemini API's generateContent endpoint, used to classify a book's
  *  genre/tags and look up its synopsis and publication date from its title/author.
  *  Asks for a strict JSON response so no free-text parsing is needed. */
@@ -69,6 +74,69 @@ object GeminiApi {
             val synopsis = parsed.optString("synopsis", "").takeIf { it.isNotBlank() }
             val publishedDate = parsed.optString("publishedDate", "").takeIf { it.isNotBlank() && !it.equals("null", ignoreCase = true) }
             BookClassification(genre, tags, synopsis, publishedDate)
+        }.getOrNull()
+    }
+
+    suspend fun recommend(books: List<com.folio.reader.data.Book>, sessions: List<com.folio.reader.data.ReadingSession>): BookRecommendation? = withContext(Dispatchers.IO) {
+        val apiKey = BuildConfig.GEMINI_API_KEY
+        if (apiKey.isBlank() || books.isEmpty()) return@withContext null
+
+        val booksJson = JSONArray().apply {
+            books.forEach { b ->
+                put(JSONObject().apply {
+                    put("id", b.id)
+                    put("title", b.title)
+                    put("author", b.author)
+                    put("genre", b.genre ?: "Unknown")
+                    put("status", b.status.name)
+                })
+            }
+        }
+
+        val sessionsJson = JSONArray().apply {
+            sessions.takeLast(20).forEach { s ->
+                put(JSONObject().apply {
+                    put("bookId", s.bookId)
+                    put("durationMillis", s.durationMillis)
+                    put("day", s.day)
+                })
+            }
+        }
+
+        val prompt = "Based on the user's library and recent reading sessions, recommend one book for them to read today. " +
+                "Library: ${booksJson}. " +
+                "Recent Sessions: ${sessionsJson}. " +
+                "Reply with ONLY a JSON object: {\"bookId\": \"<id from library>\", \"reason\": \"<1-sentence reason>\"}. " +
+                "Prioritize books with 'READING' status or 'WANT' status that match the genres of recently read books. " +
+                "No markdown, no extra text."
+
+        val requestBody = JSONObject().apply {
+            put(
+                "contents",
+                JSONArray().put(
+                    JSONObject().put(
+                        "parts",
+                        JSONArray().put(JSONObject().put("text", prompt)),
+                    ),
+                ),
+            )
+            put("generationConfig", JSONObject().put("responseMimeType", "application/json"))
+        }
+
+        val responseJson = httpPost("$ENDPOINT?key=$apiKey", requestBody) ?: return@withContext null
+        val text = responseJson.optJSONArray("candidates")
+            ?.optJSONObject(0)
+            ?.optJSONObject("content")
+            ?.optJSONArray("parts")
+            ?.optJSONObject(0)
+            ?.optString("text", "") ?: return@withContext null
+
+        runCatching {
+            val parsed = JSONObject(text)
+            BookRecommendation(
+                bookId = parsed.getString("bookId"),
+                reason = parsed.getString("reason")
+            )
         }.getOrNull()
     }
 

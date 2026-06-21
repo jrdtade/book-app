@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -40,9 +41,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.runtime.LaunchedEffect
 import com.folio.reader.data.Book
 import com.folio.reader.data.ReadStatus
 import com.folio.reader.data.overallProgress
+import com.folio.reader.network.BookRecommendation
 import com.folio.reader.ui.components.Cover
 import com.folio.reader.ui.components.ProgressRing
 import com.folio.reader.ui.folioViewModel
@@ -69,7 +72,14 @@ fun HomeScreen(
 
     val reading = books.filter { it.status == ReadStatus.READING }
     val finished = books.filter { it.status == ReadStatus.FINISHED }.take(6)
+    val recommendation by vm.recommendation.collectAsState()
     val today = androidx.compose.runtime.remember { SimpleDateFormat("EEE d MMM", Locale.US).format(Date()) }
+
+    LaunchedEffect(books.isNotEmpty()) {
+        if (books.isNotEmpty() && recommendation == null) {
+            vm.refreshRecommendation()
+        }
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -91,6 +101,20 @@ fun HomeScreen(
                 }
                 IconButton(onClick = openProfile) {
                     Icon(Icons.Filled.AccountCircle, contentDescription = "Profile & settings", tint = Ink3)
+                }
+            }
+        }
+
+        recommendation?.let { rec ->
+            val recBook = books.find { it.id == rec.bookId }
+            if (recBook != null) {
+                item {
+                    RecommendationCard(
+                        recBook,
+                        rec.reason,
+                        onClick = { openBook(recBook.id) },
+                        onRefresh = { vm.refreshRecommendation() }
+                    )
                 }
             }
         }
@@ -178,6 +202,30 @@ fun HomeScreen(
                 LazyRow(contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     items(finished) { b -> Cover(b, width = 96.dp, onClick = { openBook(b.id) }) }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecommendationCard(book: Book, reason: String, onClick: () -> Unit, onRefresh: () -> Unit) {
+    Card(
+        modifier = Modifier.padding(20.dp, 8.dp).fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)),
+        onClick = onClick
+    ) {
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Cover(book, width = 60.dp)
+            Spacer(Modifier.width(16.dp))
+            Column(Modifier.weight(1f)) {
+                Text("DAILY PICK", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                Text(book.title, style = MaterialTheme.typography.titleMedium, maxLines = 1)
+                Spacer(Modifier.height(4.dp))
+                Text(reason, style = MaterialTheme.typography.bodySmall, color = Ink2, maxLines = 2)
+            }
+            IconButton(onClick = onRefresh) {
+                Icon(Icons.Filled.Refresh, contentDescription = "Refresh recommendation", tint = Ink3, modifier = Modifier.size(18.dp))
             }
         }
     }
