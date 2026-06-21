@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.calculateCurrentOffsetForPage
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.graphicsLayer
@@ -189,18 +188,18 @@ fun FolioAppRoot(
                     state = pagerState,
                     modifier = Modifier.fillMaxSize(),
                 ) { page ->
-                    val offset = pagerState.calculateCurrentOffsetForPage(page)
-                    val absOffset = offset.coerceIn(-1f, 1f).let { if (it < 0) -it else it }
+                    val offset = ((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction)
+                        .coerceIn(-1f, 1f)
+                    val absOffset = if (offset < 0) -offset else offset
+                    val scale = 1f - (absOffset * 0.08f)
                     Box(
                         Modifier
                             .fillMaxSize()
-                            .graphicsLayer {
-                                alpha = 1f - (absOffset * 0.5f)
-                                val scale = 1f - (absOffset * 0.08f)
-                                scaleX = scale
-                                scaleY = scale
-                                translationX = size.width * offset * 0.08f
-                            },
+                            .graphicsLayer(
+                                alpha = 1f - (absOffset * 0.5f),
+                                scaleX = scale,
+                                scaleY = scale,
+                            ),
                     ) {
                         when (tabs[page]) {
                             Tab.Reading -> HomeScreen(
