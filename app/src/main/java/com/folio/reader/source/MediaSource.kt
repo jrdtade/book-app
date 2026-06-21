@@ -46,6 +46,17 @@ interface MediaSource {
     /** Newly available/updated media from this source's catalog, if it has one. */
     suspend fun fetchLatestUpdates(): List<SourceMediaInfo>
 
+    /** Filters this source's catalog supports (e.g. genre, status, sort order),
+     *  surfaced to a filter sheet in the browse UI. Empty by default. */
+    fun getFilters(): List<SourceFilter> = emptyList()
+
+    /** Searches this source's catalog. The default falls back to client-side
+     *  filtering of [fetchLatestUpdates] by title, ignoring [filters] — sources
+     *  with a real remote catalog (e.g. [com.folio.reader.extension.TachiyomiSourceAdapter])
+     *  override this to hit the actual search/filter endpoint. */
+    suspend fun search(query: String, filters: List<SourceFilter> = emptyList()): List<SourceMediaInfo> =
+        fetchLatestUpdates().filter { it.title.contains(query, ignoreCase = true) }
+
     suspend fun fetchMediaDetails(sourceMediaId: String): SourceMediaDetails
 
     suspend fun fetchChapterList(sourceMediaId: String): List<SourceChapter>

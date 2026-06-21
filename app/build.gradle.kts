@@ -90,6 +90,9 @@ dependencies {
     implementation("io.reactivex:rxjava:1.3.8")
     // Referenced by extensions implementing ConfigurableSource (login/settings screens).
     implementation("androidx.preference:preference-ktx:1.2.1")
+    // The real DI container Tachiyomi/Mihon extensions use (`Injekt.get<NetworkHelper>()`,
+    // etc.) — we register our own bindings for it in FolioApp so those calls resolve.
+    implementation("uy.kohesive.injekt:injekt-core:1.16.1")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

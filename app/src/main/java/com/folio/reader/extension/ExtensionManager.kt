@@ -378,6 +378,8 @@ class ExtensionManager(
                 File(extensionsDir, "${extension.pkgName}.json").writeText(json.encodeToString(manifest))
             }
             scanExtensions()
+            // Enable immediately so the source shows up under "Sources" without an extra tap.
+            setEnabled(extension.pkgName, true)
             true
         } catch (e: Exception) {
             File(extensionsDir, "${extension.pkgName}.apk").delete()

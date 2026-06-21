@@ -10,7 +10,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -35,6 +37,7 @@ fun BrowseScreen(
     modifier: Modifier = Modifier
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
+    var searchQuery by remember { mutableStateOf("") }
     val tabs = listOf("Sources", "Extensions")
 
     Column(modifier = modifier.fillMaxSize().padding(top = 16.dp)) {
@@ -46,9 +49,39 @@ fun BrowseScreen(
 
         Spacer(Modifier.height(16.dp))
 
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it },
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            placeholder = { Text("Search ${tabs[selectedTab].lowercase()}...") },
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+            trailingIcon = {
+                if (searchQuery.isNotEmpty()) {
+                    IconButton(onClick = { searchQuery = "" }) {
+                        Icon(Icons.Default.Clear, contentDescription = "Clear search")
+                    }
+                }
+            },
+            shape = CircleShape,
+            singleLine = true,
+            colors = OutlinedTextFieldDefaults.colors(
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                unfocusedBorderColor = Color.Transparent,
+                focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+            )
+        )
+
+        Spacer(Modifier.height(16.dp))
+
         when (selectedTab) {
-            0 -> SourcesTab(sources, onSourceClick)
-            1 -> ExtensionsTab(extensionManager)
+            0 -> {
+                val filteredSources = remember(sources, searchQuery) {
+                    sources.filter { it.name.contains(searchQuery, ignoreCase = true) }
+                }
+                SourcesTab(filteredSources, onSourceClick)
+            }
+            1 -> ExtensionsTab(extensionManager, searchQuery)
         }
     }
 }
@@ -115,10 +148,15 @@ private fun SourcesTab(
 
 /** Every extension known to the app: installed locally, or available from a repo. */
 @Composable
-private fun ExtensionsTab(extensionManager: ExtensionManager) {
-    val extensions by extensionManager.extensions.collectAsState()
+private fun ExtensionsTab(extensionManager: ExtensionManager, searchQuery: String) {
+    val allExtensions by extensionManager.extensions.collectAsState()
     val scope = rememberCoroutineScope()
     var showRepoDialog by remember { mutableStateOf(false) }
+
+    val extensions = remember(allExtensions, searchQuery) {
+        if (searchQuery.isBlank()) allExtensions
+        else allExtensions.filter { it.name.contains(searchQuery, ignoreCase = true) }
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         Row(

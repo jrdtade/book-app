@@ -6,10 +6,16 @@ import com.folio.reader.data.ReaderPrefsRepository
 import com.folio.reader.data.UserPrefsRepository
 import com.folio.reader.extension.ExtensionManager
 import com.folio.reader.network.FolioHttpClient
+import eu.kanade.tachiyomi.network.NetworkHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import okhttp3.OkHttpClient
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.InjektModule
+import uy.kohesive.injekt.api.InjektRegistrar
+import uy.kohesive.injekt.api.addSingleton
+import uy.kohesive.injekt.api.addSingletonFactory
 
 class FolioApp : Application() {
     lateinit var repository: BookRepository
@@ -25,6 +31,19 @@ class FolioApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+
+        // Real extensions resolve `Injekt.get<Application>()` / `Injekt.get<NetworkHelper>()`
+        // themselves (e.g. for login SharedPreferences or a shared OkHttpClient) — these
+        // bindings make those calls return working instances instead of throwing.
+        Injekt.importModule(
+            object : InjektModule {
+                override fun InjektRegistrar.registerInjectables() {
+                    addSingleton(this@FolioApp as Application)
+                    addSingletonFactory { NetworkHelper(this@FolioApp, httpClient) }
+                }
+            },
+        )
+
         extensionManager = ExtensionManager(this, appScope, httpClient)
         repository = BookRepository(this, extensionManager, appScope)
         readerPrefsRepository = ReaderPrefsRepository(this)
