@@ -137,7 +137,16 @@ fun HomeScreen(
             }
         }
 
-        if (reading.isEmpty()) {
+        if (reading.isEmpty() && books.isEmpty()) {
+            item {
+                Box(
+                    modifier = Modifier.fillParentMaxHeight(0.8f).fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    EmptyLibraryCard(onImport = { launcher.launch(arrayOf("application/epub+zip")) })
+                }
+            }
+        } else if (reading.isEmpty()) {
             item { EmptyLibraryCard(onImport = { launcher.launch(arrayOf("application/epub+zip")) }) }
         } else {
             val hero = reading.first()
@@ -281,15 +290,16 @@ private fun EmptyLibraryCard(onImport: () -> Unit) {
         Modifier.padding(20.dp, 16.dp).fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
     ) {
-        Column(Modifier.padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(Modifier.padding(28.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(Icons.Filled.MenuBook, contentDescription = null, tint = Ink3, modifier = Modifier.size(40.dp))
             Spacer(Modifier.height(12.dp))
-            Text("Your library is empty", style = MaterialTheme.typography.titleMedium)
+            Text("Your library is empty", style = MaterialTheme.typography.titleMedium, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             Spacer(Modifier.height(4.dp))
             Text(
                 "Import an EPUB to start reading.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = Ink3,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
             Spacer(Modifier.height(16.dp))
             Button(onClick = onImport) {

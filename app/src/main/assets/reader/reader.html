@@ -5,13 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover">
 <style>
   html, body { margin:0; padding:0; height:100%; width:100%; overflow:hidden; background:transparent; }
-  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; -webkit-user-select:none; user-select:none; }
-  #content, #scrollContent { -webkit-user-select:text; user-select:text; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body { -webkit-user-select:none; user-select:none; }
+  #content, #scrollContent, #content *, #scrollContent * { -webkit-user-select:text; user-select:text; }
   #stage { position:fixed; inset:0; overflow:hidden; perspective:1400px; }
   /* shifter slides horizontally; #stage clips. content must NOT clip or
      every column past the first is hidden (only first page was readable). */
   #shifter { position:absolute; inset:0; will-change:transform; transform-style:preserve-3d; backface-visibility:hidden; }
-  #curlShade { position:absolute; inset:0; pointer-events:none; opacity:0; z-index:4; }
+  #curlShade { position:absolute; inset:0; pointer-events:none; opacity:0; z-index:4; mix-blend-mode: multiply; }
+  #curlOverlay { position:absolute; inset:0; pointer-events:none; z-index:5; background:rgba(0,0,0,0); overflow:hidden; display:none; }
+  #turningPage { position:absolute; inset:0; z-index:6; pointer-events:none; background:inherit; display:none; box-shadow: -10px 0 20px rgba(0,0,0,0.2); }
   #content {
     position:absolute; inset:0; height:100%;
     column-fill:auto; -webkit-column-fill:auto; overflow:visible;
@@ -121,30 +124,37 @@
     var sh = document.getElementById('shifter');
     var shade = document.getElementById('curlShade');
     var isCurl = prefs.flip === 'curl';
-    var dur = isCurl ? 520 : 360;
-    var props = isCurl ? 'transform ' + dur + 'ms cubic-bezier(.25,.8,.25,1), ' +
-      'opacity ' + dur + 'ms linear' : 'transform ' + dur + 'ms cubic-bezier(.25,.8,.25,1)';
-    sh.style.transition = animate ? props : 'none';
-    shade.style.transition = sh.style.transition;
+    var stageW = stageWidth();
 
     if (isCurl) {
-      var stageW = stageWidth();
       var baseX = -page * stageW;
       var deviation = x - baseX;
-      var frac = stageW > 0 ? Math.max(-1, Math.min(1, deviation / stageW)) : 0;
-      var rot = -frac * 50;
+      var frac = stageW > 0 ? (deviation / stageW) : 0;
+      var absFrac = Math.abs(frac);
+
+      // Google Books style: the page actually bends.
+      // We simulate this by rotating and skewing the shifter, but also adding a fold shadow.
+      var dur = 500;
+      sh.style.transition = animate ? 'transform ' + dur + 'ms cubic-bezier(0.15, 0.3, 0.4, 1)' : 'none';
+      shade.style.transition = sh.style.transition;
+
+      // Rotation + Skew + Translate for a "peeling" look
+      var rot = -frac * 60;
+      var skew = frac * 15;
+      var scale = 1 - (absFrac * 0.05);
       sh.style.transformOrigin = (deviation < 0) ? 'right center' : 'left center';
-      sh.style.transform = 'translateX(' + x + 'px) rotateY(' + rot + 'deg)';
-      var shadeOpacity = Math.abs(frac) * 0.5;
-      shade.style.left = (deviation < 0) ? '0px' : 'auto';
-      shade.style.right = (deviation < 0) ? 'auto' : '0px';
-      shade.style.width = (Math.abs(frac) * stageW) + 'px';
-      shade.style.background = (deviation < 0)
-        ? 'linear-gradient(to left, rgba(0,0,0,' + shadeOpacity + '), rgba(0,0,0,0))'
-        : 'linear-gradient(to right, rgba(0,0,0,' + shadeOpacity + '), rgba(0,0,0,0))';
+      sh.style.transform = 'translateX(' + x + 'px) rotateY(' + rot + 'deg) skewY(' + skew + 'deg) scale(' + scale + ')';
+
+      // Fold shadow (crease)
+      var shadowOpacity = absFrac * 0.45;
       shade.style.opacity = '1';
+      var gradientDir = (deviation < 0) ? 'to left' : 'to right';
+      var creaseColor = 'rgba(0,0,0,' + (absFrac * 0.6) + ')';
+      shade.style.background = 'linear-gradient(' + gradientDir + ', rgba(0,0,0,0) 0%, ' + creaseColor + ' 48%, #fff 50%, rgba(0,0,0,0) 52%, rgba(0,0,0,0) 100%)';
     } else {
-      sh.style.transform = 'translateX(' + x + 'px)';
+      var dur = 360;
+      sh.style.transition = animate ? 'transform ' + dur + 'ms cubic-bezier(.25,.8,.25,1)' : 'none';
+      sh.style.transform = 'translateX(' + x + 'px) rotateY(0) skewY(0)';
       shade.style.opacity = '0';
     }
   }
@@ -239,6 +249,13 @@
     dragging = false;
     edge.style.opacity = '0';
     var dx = lastX - startX;
+
+    // If text was selected, don't trigger a tap/menu toggle
+    if (window.getSelection().toString().length > 0) {
+      moved = false;
+      return;
+    }
+
     if (axisLocked === 'x' && moved) {
       var threshold = stageWidth() * 0.18;
       if (dx <= -threshold) { if (!next()) { if (window.FolioBridge) window.FolioBridge.onNextChapter(); } }

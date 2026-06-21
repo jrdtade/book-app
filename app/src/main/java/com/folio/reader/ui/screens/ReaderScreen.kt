@@ -187,6 +187,11 @@ fun ReaderScreen(bookId: String, back: () -> Unit) {
                     layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
                     settings.javaScriptEnabled = true
                     settings.allowFileAccess = true
+                    settings.textZoom = 100
+                    isFocusable = true
+                    isFocusableInTouchMode = true
+                    isLongClickable = true
+                    isHapticFeedbackEnabled = true
                     setBackgroundColor(AndroidColor.TRANSPARENT)
                     addJavascriptInterface(
                         object {
@@ -208,7 +213,8 @@ fun ReaderScreen(bookId: String, back: () -> Unit) {
 
                             @JavascriptInterface
                             fun onSelection(text: String) {
-                                selectedText = text
+                                // Run on main thread to update Compose state
+                                post { selectedText = text }
                             }
 
                             @JavascriptInterface
@@ -240,6 +246,7 @@ fun ReaderScreen(bookId: String, back: () -> Unit) {
                             val current = vm.book.value ?: return
                             pushPrefs(this@apply, vm.prefs.value)
                             pushChapter(current.currentChapter, this@apply)
+                            requestFocus()
                         }
                     }
                     loadUrl("file:///android_asset/reader/reader.html")
@@ -272,6 +279,11 @@ fun ReaderScreen(bookId: String, back: () -> Unit) {
                     selectedText = ""
                 },
                 onNote = { noteDraftFor = selectedText },
+                onBookmark = {
+                    vm.addBookmark()
+                    webViewRef?.evaluateJavascript("window.getSelection().removeAllRanges()", null)
+                    selectedText = ""
+                },
                 onDefine = {
                     val intent = Intent(Intent.ACTION_PROCESS_TEXT).apply {
                         type = "text/plain"
@@ -406,6 +418,7 @@ private fun SelectionToolbar(
     modifier: Modifier = Modifier,
     onHighlight: () -> Unit,
     onNote: () -> Unit,
+    onBookmark: () -> Unit,
     onDefine: () -> Unit,
     onCopy: () -> Unit,
     onDismiss: () -> Unit,
@@ -421,6 +434,7 @@ private fun SelectionToolbar(
     ) {
         IconButton(onClick = onHighlight) { Icon(Icons.Filled.BorderColor, contentDescription = "Highlight") }
         IconButton(onClick = onNote) { Icon(Icons.AutoMirrored.Filled.Notes, contentDescription = "Add note") }
+        IconButton(onClick = onBookmark) { Icon(Icons.Filled.BookmarkIcon, contentDescription = "Bookmark") }
         IconButton(onClick = onDefine) { Icon(Icons.Filled.MenuBook, contentDescription = "Look up") }
         IconButton(onClick = onCopy) { Icon(Icons.Filled.ContentCopy, contentDescription = "Copy") }
         IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "Dismiss") }
