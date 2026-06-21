@@ -101,6 +101,7 @@ fun ReaderScreen(bookId: String, back: () -> Unit) {
     val prefs by vm.prefs.collectAsState()
     val highlights by vm.highlights.collectAsState()
     val bookmarks by vm.bookmarks.collectAsState()
+    val globalPage by vm.globalPage.collectAsState()
     var showGear by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
     var showThemesSheet by remember { mutableStateOf(false) }
@@ -297,6 +298,15 @@ fun ReaderScreen(bookId: String, back: () -> Unit) {
                 maxLines = 1,
                 modifier = Modifier.align(Alignment.TopCenter).padding(top = 14.dp).fillMaxWidth(0.7f),
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            )
+        }
+
+        if (globalPage.total > 1) {
+            Text(
+                "Page ${globalPage.page} of ${globalPage.total}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.55f),
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 14.dp),
             )
         }
     }

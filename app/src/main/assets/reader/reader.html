@@ -151,8 +151,7 @@
   function setPendingFraction(frac) { pendingFraction = frac; }
 
   function report() {
-    var pn = document.getElementById('pageNum');
-    pn.textContent = (mode === 'paged' && total > 1) ? (page + 1) + ' / ' + total : '';
+    // Global (whole-book) page numbering is rendered natively, not per-chapter here.
     if (window.FolioBridge) window.FolioBridge.onState(page, total);
   }
 

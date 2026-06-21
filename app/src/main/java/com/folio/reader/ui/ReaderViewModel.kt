@@ -13,6 +13,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
@@ -21,8 +22,14 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.math.ceil
 
 data class SearchHit(val chapterIndex: Int, val snippet: String, val charOffset: Int)
+
+/** Whole-book page number (1-based) and total, independent of per-chapter pagination. */
+data class GlobalPage(val page: Int, val total: Int)
+
+private const val CHARS_PER_PAGE = 1600
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ReaderViewModel(private val app: FolioApp) : ViewModel() {
@@ -50,6 +57,20 @@ class ReaderViewModel(private val app: FolioApp) : ViewModel() {
     private val _searching = MutableStateFlow(false)
     val searching: StateFlow<Boolean> = _searching
 
+    private val _chapterCharCounts = MutableStateFlow<List<Int>>(emptyList())
+
+    /** Estimated whole-book page number, e.g. "Page 1 of 500", stable regardless of font/size changes. */
+    val globalPage: StateFlow<GlobalPage> = combine(_book, _chapterCharCounts) { b, counts ->
+        if (b == null || counts.isEmpty()) return@combine GlobalPage(1, 1)
+        val totalChars = counts.sum().coerceAtLeast(1)
+        val charsBefore = counts.take(b.currentChapter).sum()
+        val charsInChapter = counts.getOrElse(b.currentChapter) { 0 }
+        val charsIn = charsBefore + (b.chapterProgress * charsInChapter)
+        val total = ceil(totalChars / CHARS_PER_PAGE.toDouble()).toInt().coerceAtLeast(1)
+        val page = (charsIn / CHARS_PER_PAGE).toInt().coerceIn(0, total - 1) + 1
+        GlobalPage(page, total)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), GlobalPage(1, 1))
+
     private var sessionStartMs = 0L
     private var loadedBookId: String? = null
 
@@ -57,8 +78,18 @@ class ReaderViewModel(private val app: FolioApp) : ViewModel() {
         if (loadedBookId == bookId) return
         loadedBookId = bookId
         viewModelScope.launch {
-            _book.value = repo.bookDao.get(bookId)
+            val loaded = repo.bookDao.get(bookId)
+            _book.value = loaded
             sessionStartMs = System.currentTimeMillis()
+            if (loaded != null) {
+                _chapterCharCounts.value = withContext(Dispatchers.IO) {
+                    chapterPaths().map { rel ->
+                        val file = File(loaded.contentDir, rel)
+                        if (!file.exists()) return@map 0
+                        Regex("<[^>]+>").replace(file.readText(Charsets.UTF_8), "").trim().length
+                    }
+                }
+            }
         }
     }
 
