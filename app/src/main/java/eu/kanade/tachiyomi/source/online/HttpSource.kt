@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.source.online
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -13,6 +14,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
+import uy.kohesive.injekt.api.injectLazy
 import java.security.MessageDigest
 
 /**
@@ -34,7 +36,14 @@ abstract class HttpSource : CatalogueSource {
         (0..7).map { bytes[it].toLong() and 0xff shl 8 * (7 - it) }.reduce(Long::or) and Long.MAX_VALUE
     }
 
-    open val client: OkHttpClient = OkHttpClient()
+    /** Real Tachiyomi/Mihon's HttpSource exposes this directly — many extensions
+     *  (anything behind Cloudflare) call `network.cloudflareClient` themselves
+     *  instead of going through [client]. Resolved via Injekt, registered in
+     *  `FolioApp.onCreate`. */
+    val network: NetworkHelper by injectLazy()
+
+    open val client: OkHttpClient
+        get() = network.client
 
     open val headers: Headers by lazy { headersBuilder().build() }
 
