@@ -32,16 +32,17 @@ data class StatsState(
 
 class StatsViewModel(app: FolioApp) : ViewModel() {
     private val repo = app.repository
+    private val userPrefsRepo = app.userPrefsRepository
 
     val state: StateFlow<StatsState> = combine(
-        repo.observeBooks(), repo.observeSessions(), repo.observeHighlights(),
-    ) { books, sessions, highlights ->
-        computeStats(books, sessions, highlights)
+        repo.observeBooks(), repo.observeSessions(), repo.observeHighlights(), userPrefsRepo.prefsFlow,
+    ) { books, sessions, highlights, userPrefs ->
+        computeStats(books, sessions, highlights, userPrefs.annualGoal)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), StatsState())
 
     private val dayFmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)
 
-    private fun computeStats(books: List<Book>, sessions: List<ReadingSession>, highlights: List<Highlight>): StatsState {
+    private fun computeStats(books: List<Book>, sessions: List<ReadingSession>, highlights: List<Highlight>, annualGoal: Int): StatsState {
         val finished = books.count { it.status == ReadStatus.FINISHED }
         val minutesByDay = sessions.groupBy { it.day }.mapValues { (_, s) -> s.sumOf { it.durationMillis } / 60000 }
 
@@ -99,7 +100,7 @@ class StatsViewModel(app: FolioApp) : ViewModel() {
 
         return StatsState(
             booksRead = finished,
-            goal = maxOf(24, finished),
+            goal = annualGoal,
             currentStreak = streak,
             longestStreak = longest,
             hoursThisWeek = hoursThisWeek,

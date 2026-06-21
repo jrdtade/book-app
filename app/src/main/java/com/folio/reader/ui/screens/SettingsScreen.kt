@@ -17,14 +17,18 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -33,8 +37,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.folio.reader.ui.LibraryViewModel
+import com.folio.reader.ui.UserViewModel
 import com.folio.reader.ui.folioViewModel
 import com.folio.reader.ui.theme.Blue
 import com.folio.reader.ui.theme.BlueSoft
@@ -43,8 +49,13 @@ import com.folio.reader.ui.theme.Ink3
 @Composable
 fun SettingsScreen() {
     val vm: LibraryViewModel = folioViewModel()
+    val userVm: UserViewModel = folioViewModel()
     val books by vm.books.collectAsState()
+    val userPrefs by userVm.prefs.collectAsState()
     var reminder by remember { mutableStateOf(true) }
+    var showGoalDialog by remember { mutableStateOf(false) }
+    val displayName = userPrefs?.name?.takeIf { it.isNotBlank() } ?: "Reader"
+    val annualGoal = userPrefs?.annualGoal ?: 24
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
         item {
@@ -59,7 +70,7 @@ fun SettingsScreen() {
                     ) { Icon(Icons.Filled.Person, contentDescription = null, tint = androidx.compose.ui.graphics.Color.White) }
                     Spacer(Modifier.width(15.dp))
                     Column {
-                        Text("Reader", style = MaterialTheme.typography.titleMedium)
+                        Text(displayName, style = MaterialTheme.typography.titleMedium)
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Filled.CloudOff, contentDescription = null, tint = Ink3, modifier = Modifier.size(14.dp))
                             Spacer(Modifier.width(6.dp))
@@ -88,6 +99,11 @@ fun SettingsScreen() {
         }
         item {
             SettingsGroup("Goals") {
+                SettingsRow(
+                    "Annual reading goal",
+                    detail = "$annualGoal books",
+                    onClick = { showGoalDialog = true },
+                )
                 SettingsRow("Daily reminder", toggle = true, on = reminder, onToggle = { reminder = it }, last = true)
             }
         }
@@ -106,6 +122,39 @@ fun SettingsScreen() {
             }
         }
     }
+
+    if (showGoalDialog) {
+        GoalDialog(
+            current = annualGoal,
+            onDismiss = { showGoalDialog = false },
+            onSave = { goal ->
+                userVm.update { it.copy(annualGoal = goal) }
+                showGoalDialog = false
+            },
+        )
+    }
+}
+
+@Composable
+private fun GoalDialog(current: Int, onDismiss: () -> Unit, onSave: (Int) -> Unit) {
+    var text by remember { mutableStateOf(current.toString()) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Annual reading goal") },
+        text = {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { v -> if (v.all { it.isDigit() }) text = v },
+                placeholder = { Text("Books this year") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = { onSave(text.toIntOrNull()?.coerceIn(1, 999) ?: current) }) { Text("Save") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 @Composable
@@ -125,11 +174,18 @@ private fun SettingsRow(
     onToggle: (Boolean) -> Unit = {},
     chevron: Boolean = true,
     last: Boolean = false,
+    onClick: (() -> Unit)? = null,
 ) {
     Row(
         Modifier
             .fillMaxWidth()
-            .let { if (toggle) it.clickable { onToggle(!on) } else it }
+            .let {
+                when {
+                    toggle -> it.clickable { onToggle(!on) }
+                    onClick != null -> it.clickable(onClick = onClick)
+                    else -> it
+                }
+            }
             .padding(15.dp, 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,

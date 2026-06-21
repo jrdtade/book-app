@@ -36,18 +36,20 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.navigation.NavType
 import com.folio.reader.ui.LibraryViewModel
+import com.folio.reader.ui.UserViewModel
 import com.folio.reader.ui.folioViewModel
 import com.folio.reader.ui.screens.CoverPickerScreen
 import com.folio.reader.ui.screens.DetailScreen
 import com.folio.reader.ui.screens.HomeScreen
 import com.folio.reader.ui.screens.LibraryScreen
+import com.folio.reader.ui.screens.OnboardingScreen
 import com.folio.reader.ui.screens.ReaderScreen
 import com.folio.reader.ui.screens.SettingsScreen
 import com.folio.reader.ui.screens.StatsScreen
 import com.folio.reader.ui.theme.FolioTheme
 
 sealed class Tab(val route: String, val label: String) {
-    data object Reading : Tab("home", "Reading")
+    data object Reading : Tab("home", "Home")
     data object Library : Tab("library", "Library")
     data object Stats : Tab("stats", "Stats")
     data object Settings : Tab("settings", "Settings")
@@ -94,6 +96,16 @@ fun FolioAppRoot(
     pendingImportUri: Uri? = null,
     onPendingImportConsumed: () -> Unit = {},
 ) {
+    val userViewModel: UserViewModel = folioViewModel()
+    val userPrefs by userViewModel.prefs.collectAsState()
+    var onboardingDone by remember { mutableStateOf(false) }
+
+    val prefs = userPrefs ?: return // still loading from DataStore
+    if (!prefs.onboardingComplete && !onboardingDone) {
+        OnboardingScreen(onDone = { onboardingDone = true })
+        return
+    }
+
     val navController = rememberNavController()
     val libraryViewModel: LibraryViewModel = folioViewModel()
 
