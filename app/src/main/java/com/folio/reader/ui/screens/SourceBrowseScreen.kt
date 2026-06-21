@@ -45,7 +45,12 @@ fun SourceBrowseScreen(
     var errored by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var query by remember(source.id) { mutableStateOf("") }
-    var filters by remember(source.id) { mutableStateOf(source.getFilters()) }
+    // getFilters() runs synchronously during composition (no try/catch around it like the
+    // async fetch calls below) — a throwing implementation would otherwise crash the whole
+    // screen outright instead of just leaving the filter button hidden.
+    var filters by remember(source.id) {
+        mutableStateOf(runCatching { source.getFilters() }.getOrDefault(emptyList()))
+    }
     var showFilters by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()

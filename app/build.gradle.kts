@@ -80,6 +80,9 @@ dependencies {
     implementation("androidx.webkit:webkit:1.11.0")
     implementation("io.coil-kt:coil-compose:2.6.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    // Some extensions add okhttp3.brotli.BrotliInterceptor themselves (sites that serve
+    // brotli-compressed responses); without this on the classpath their class fails to link.
+    implementation("com.squareup.okhttp3:okhttp-brotli:4.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
     implementation("org.jsoup:jsoup:1.17.2")
     // Pure-Java unrar implementation, used to read .cbr comic archives.
@@ -91,11 +94,13 @@ dependencies {
     // Referenced by extensions implementing ConfigurableSource (login/settings screens).
     implementation("androidx.preference:preference-ktx:1.2.1")
     // The real DI container Tachiyomi/Mihon extensions use (`Injekt.get<NetworkHelper>()`,
-    // `by injectLazy()`, etc.) — we register our own bindings for it in FolioApp so those
-    // calls resolve. This is the exact fork (and commit) the real Mihon app itself depends
-    // on (see gradle/libs.versions.toml in github.com/mihonorg/mihon) — published via
-    // JitPack, not the original uy.kohesive.injekt artifacts on Maven Central.
-    implementation("com.github.mihonapp:injekt:91edab2317")
+    // `by injectLazy()`, etc.). Extensions' compiled bytecode bakes in (via Kotlin inline
+    // functions) the exact internal call shape of whichever injekt fork *they* compiled
+    // against — Keiyoushi's own build pins this precise fork+commit (see
+    // gradle/libs.versions.toml in github.com/keiyoushi/extensions-source), which is
+    // *not* the same fork Mihon itself uses, so we have to match Keiyoushi's, not Mihon's,
+    // or extension classes referencing it fail to link at runtime.
+    implementation("com.github.null2264.injekt:injekt-core:4135455a2a")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
