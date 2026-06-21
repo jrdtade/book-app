@@ -13,13 +13,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Equalizer
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.outlined.LibraryBooks
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -55,7 +57,7 @@ sealed class Tab(val route: String, val label: String) {
     data object Settings : Tab("settings", "Settings")
 }
 
-private val tabs = listOf(Tab.Reading, Tab.Library, Tab.Stats, Tab.Settings)
+private val tabs = listOf(Tab.Reading, Tab.Library, Tab.Stats)
 
 class MainActivity : ComponentActivity() {
     var pendingImportUri by mutableStateOf<Uri?>(null)
@@ -109,15 +111,17 @@ fun FolioAppRoot(
     val navController = rememberNavController()
     val libraryViewModel: LibraryViewModel = folioViewModel()
 
+    fun navigateToTab(route: String) {
+        navController.navigate(route) {
+            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+            launchSingleTop = true
+            restoreState = true
+        }
+    }
+
     LaunchedEffect(pendingImportUri) {
         val uri = pendingImportUri ?: return@LaunchedEffect
-        libraryViewModel.importEpub(uri) {
-            navController.navigate(Tab.Library.route) {
-                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                launchSingleTop = true
-                restoreState = true
-            }
-        }
+        libraryViewModel.importEpub(uri) { navigateToTab(Tab.Library.route) }
         onPendingImportConsumed()
     }
 
@@ -126,6 +130,18 @@ fun FolioAppRoot(
     val showTabBar = currentRoute == null || tabs.any { it.route == currentRoute }
 
     Scaffold(
+        topBar = {
+            if (showTabBar) {
+                TopAppBar(
+                    title = {},
+                    actions = {
+                        IconButton(onClick = { navigateToTab(Tab.Settings.route) }) {
+                            Icon(Icons.Filled.AccountCircle, contentDescription = "Profile & settings")
+                        }
+                    },
+                )
+            }
+        },
         bottomBar = {
             if (showTabBar) {
                 NavigationBar {
@@ -134,20 +150,14 @@ fun FolioAppRoot(
                         val selected = current?.hierarchy?.any { it.route == tab.route } == true
                         NavigationBarItem(
                             selected = selected,
-                            onClick = {
-                                navController.navigate(tab.route) {
-                                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            },
+                            onClick = { navigateToTab(tab.route) },
                             icon = {
                                 Icon(
                                     when (tab) {
                                         Tab.Reading -> Icons.Filled.Home
                                         Tab.Library -> Icons.Outlined.LibraryBooks
                                         Tab.Stats -> Icons.Filled.Equalizer
-                                        Tab.Settings -> Icons.Filled.Settings
+                                        Tab.Settings -> Icons.Filled.AccountCircle
                                     },
                                     contentDescription = tab.label,
                                 )
@@ -168,14 +178,14 @@ fun FolioAppRoot(
                 HomeScreen(
                     openBook = { id -> navController.navigate("detail/$id") },
                     openReader = { id -> navController.navigate("reader/$id") },
-                    goToTab = { route -> navController.navigate(route) },
+                    goToTab = { route -> navigateToTab(route) },
                 )
             }
             composable(Tab.Library.route) {
                 LibraryScreen(openBook = { id -> navController.navigate("detail/$id") })
             }
             composable(Tab.Stats.route) { StatsScreen() }
-            composable(Tab.Settings.route) { SettingsScreen() }
+            composable(Tab.Settings.route) { SettingsScreen(back = { navController.popBackStack() }) }
             composable(
                 "detail/{bookId}",
                 arguments = listOf(navArgument("bookId") { type = NavType.StringType }),

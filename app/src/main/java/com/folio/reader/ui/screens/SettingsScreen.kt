@@ -19,11 +19,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
@@ -47,7 +49,7 @@ import com.folio.reader.ui.theme.BlueSoft
 import com.folio.reader.ui.theme.Ink3
 
 @Composable
-fun SettingsScreen() {
+fun SettingsScreen(back: () -> Unit = {}) {
     val vm: LibraryViewModel = folioViewModel()
     val userVm: UserViewModel = folioViewModel()
     val books by vm.books.collectAsState()
@@ -59,7 +61,14 @@ fun SettingsScreen() {
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
         item {
-            Text("Settings", style = MaterialTheme.typography.headlineLarge, modifier = Modifier.padding(20.dp, 28.dp, 20.dp, 16.dp))
+            Row(
+                Modifier.fillMaxWidth().padding(8.dp, 24.dp, 20.dp, 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(onClick = back) { Icon(Icons.Filled.ArrowBack, contentDescription = "Back") }
+                Spacer(Modifier.width(4.dp))
+                Text("Settings", style = MaterialTheme.typography.headlineLarge)
+            }
         }
         item {
             Card(Modifier.padding(20.dp, 0.dp).fillMaxWidth(), shape = RoundedCornerShape(18.dp)) {
