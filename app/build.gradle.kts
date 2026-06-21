@@ -79,31 +79,30 @@ dependencies {
 
     implementation("androidx.webkit:webkit:1.11.0")
     implementation("io.coil-kt:coil-compose:2.6.0")
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    // Some extensions add okhttp3.brotli.BrotliInterceptor themselves (sites that serve
-    // brotli-compressed responses); without this on the classpath their class fails to link.
-    implementation("com.squareup.okhttp3:okhttp-brotli:4.12.0")
-    // Folio's own + the COMPLETE set of libraries Keiyoushi's "common" bundle exposes to
-    // every extension (see gradle/libs.versions.toml in github.com/keiyoushi/extensions-source).
-    // Extensions compile against these with `compileOnly` and expect the host app to provide
-    // them at runtime — a missing one shows up as "Failed resolution of: <class>". Provided
-    // here all at once rather than discovered one crash at a time.
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
-    // Some extensions' shared helper libs (e.g. keiyoushi.utils) resolve a ProtoBuf
-    // instance via Injekt, same as Json — registered in FolioApp to match.
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-protobuf:1.6.3")
-    // keiyoushi.utils decodes JSON straight from an OkHttp BufferedSource via
-    // Json.decodeFromBufferedSource (kotlinx.serialization.json.okio.OkioStreamsKt).
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json-okio:1.6.3")
-    // Nullness annotations referenced by some extension/library bytecode.
-    implementation("org.jspecify:jspecify:1.0.0")
-    implementation("org.jsoup:jsoup:1.17.2")
     // Pure-Java unrar implementation, used to read .cbr comic archives.
     implementation("com.github.junrar:junrar:7.5.5")
 
-    // Real Mihon/Keiyoushi extensions are compiled against extensions-lib, whose
-    // Source/CatalogueSource/HttpSource contracts return RxJava 1 Observables.
+    // ──────────────────────────────────────────────────────────────────────────────
+    // Keiyoushi extension runtime: the COMPLETE "common" bundle every extension is
+    // compiled against (compileOnly) and expects the host app to provide at runtime.
+    // Versions matched EXACTLY to keiyoushi/extensions-source gradle/libs.versions.toml
+    // so an extension's compiled serializer/bytecode links against the same APIs it was
+    // built with. A mismatch shows up as "Failed resolution of: <class>" or NoSuchMethodError.
+    // Keiyoushi pins serialization to 1.7.3 deliberately (1.8+ drops generated classes the
+    // compile-only lib needs) — do not bump past it.
+    // ──────────────────────────────────────────────────────────────────────────────
+    implementation("com.squareup.okhttp3:okhttp:5.3.2")
+    implementation("com.squareup.okhttp3:okhttp-brotli:5.3.2")
+    implementation("org.jsoup:jsoup:1.22.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-protobuf:1.7.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json-okio:1.7.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("io.reactivex:rxjava:1.3.8")
+    implementation("org.jspecify:jspecify:1.0.0")
+    // JS engine some extensions use via eu.kanade.tachiyomi.network.JavaScriptEngine.
+    implementation("app.cash.quickjs:quickjs-android:0.9.2")
     // Referenced by extensions implementing ConfigurableSource (login/settings screens).
     implementation("androidx.preference:preference-ktx:1.2.1")
     // The real DI container Tachiyomi/Mihon extensions use (`Injekt.get<NetworkHelper>()`,
