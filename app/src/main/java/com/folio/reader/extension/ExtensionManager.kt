@@ -3,250 +3,161 @@ package com.folio.reader.extension
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
-import com.folio.reader.data.MediaType
-import com.folio.reader.source.*
+import com.folio.reader.source.MediaSource
+import dalvik.system.DexClassLoader
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import org.jsoup.Jsoup
 import java.io.File
 
-/** Persistently track enabled/disabled state and repos. */
-private val Context.extensionDataStore by preferencesDataStore(name = "extension_prefs")
+/** Persists which extensions the user has enabled, keyed by package name. */
+private val Context.extensionPrefs by preferencesDataStore(name = "extension_prefs")
+private fun enabledKey(pkgName: String) = booleanPreferencesKey("enabled_$pkgName")
 
-private val DEFAULT_REPOS = setOf("https://raw.githubusercontent.com/keiyoushi/extensions/repo/index.min.json")
-
+/**
+ * Descriptor dropped next to an extension's code file in the extensions directory,
+ * e.g. `com.example.foo.json` describing `com.example.foo.dex`.
+ */
 @Serializable
-data class RemoteExtension(
+private data class ExtensionManifest(
+    val pkgName: String,
     val name: String,
-    val pkg: String,
-    val apk: String,
     val version: String,
-    val lang: String? = null,
-    val nsfw: Int = 0
+    val factoryClass: String,
+    val lang: String = "en",
+    val nsfw: Boolean = false,
 )
 
+/** A discovered extension, as surfaced to the UI. */
 data class Extension(
     val pkgName: String,
     val name: String,
     val version: String,
+    val lang: String,
+    val isNsfw: Boolean,
     val isEnabled: Boolean,
-    val isInstalled: Boolean,
-    val file: File? = null,
-    val remoteInfo: RemoteExtension? = null,
-    val isDownloading: Boolean = false,
-    val progress: Float = 0f
 )
 
+private data class DiscoveredExtension(val manifest: ExtensionManifest, val codeFile: File)
+
 /**
- * Scans for and loads external media sources.
+ * Scans a local directory for extensions and dynamically loads the [MediaSource]s
+ * each one contributes. An extension is a `<pkgName>.json` manifest paired with a
+ * `<pkgName>.dex` (or `.jar`) code file containing a class that implements
+ * [SourceFactory]. Enabled/disabled state is tracked in DataStore so it survives
+ * rescans and app restarts, and the discovered extension list is exposed as a
+ * reactive [StateFlow] for the UI to observe — the same shape Mihon uses for its
+ * `installedExtensionsFlow`, minus the package-manager/APK-signing machinery that
+ * doesn't apply here.
  */
 class ExtensionManager(
     private val context: Context,
     private val scope: CoroutineScope,
-    private val httpClient: OkHttpClient
 ) {
     private val extensionsDir = File(context.filesDir, "extensions").apply { mkdirs() }
+    private val codeCacheDir = File(context.codeCacheDir, "extension_opt").apply { mkdirs() }
     private val json = Json { ignoreUnknownKeys = true }
 
-    private val _installedFiles = MutableStateFlow<List<File>>(emptyList())
-    private val _availableExtensions = MutableStateFlow<List<RemoteExtension>>(emptyList())
-    private val _downloadingState = MutableStateFlow<Map<String, Float>>(emptyMap())
+    private val discoveredFlow = MutableStateFlow<Map<String, DiscoveredExtension>>(emptyMap())
 
-    /** All discovered extensions, reactively updated when files or settings change. */
+    /** Cached, already dynamically-loaded sources, by package name, so toggling an
+     *  extension on and off doesn't reload its code every time. */
+    private val sourcesCache = mutableMapOf<String, List<MediaSource>>()
+    private val classLoaderCache = mutableMapOf<String, DexClassLoader>()
+
+    /** Reactive view of every discovered extension and its enabled flag, rebuilt
+     *  whenever the directory is rescanned or the user toggles an extension. */
     val extensions: StateFlow<List<Extension>> = combine(
-        _installedFiles,
-        _availableExtensions,
-        _downloadingState,
-        context.extensionDataStore.data
-    ) { files, remote, downloading, prefs ->
-        val remoteMap = remote.associateBy { it.pkg }
-        
-        val installed = files.map { file ->
-            val pkgName = file.nameWithoutExtension
-            val info = remoteMap[pkgName]
+        discoveredFlow,
+        context.extensionPrefs.data,
+    ) { discovered, prefs ->
+        discovered.values.map { (manifest, _) ->
             Extension(
-                pkgName = pkgName,
-                name = info?.name ?: pkgName.substringAfterLast("."),
-                version = info?.version ?: "1.0.0",
-                isEnabled = prefs[booleanPreferencesKey(pkgName)] ?: true,
-                isInstalled = true,
-                file = file,
-                remoteInfo = info
+                pkgName = manifest.pkgName,
+                name = manifest.name,
+                version = manifest.version,
+                lang = manifest.lang,
+                isNsfw = manifest.nsfw,
+                isEnabled = prefs[enabledKey(manifest.pkgName)] ?: false,
             )
-        }
-
-        val installedPkgs = installed.map { it.pkgName }.toSet()
-        val available = remote.filter { it.pkg !in installedPkgs }.map {
-            Extension(
-                pkgName = it.pkg,
-                name = it.name,
-                version = it.version,
-                isEnabled = false,
-                isInstalled = false,
-                remoteInfo = it,
-                isDownloading = downloading.containsKey(it.pkg),
-                progress = downloading[it.pkg] ?: 0f
-            )
-        }
-
-        (installed + available).sortedBy { it.name }
+        }.sortedBy { it.name }
     }.stateIn(scope, SharingStarted.Eagerly, emptyList())
-
-    val repos: StateFlow<Set<String>> = context.extensionDataStore.data
-        .map { it[stringSetPreferencesKey("repos")] ?: DEFAULT_REPOS }
-        .stateIn(scope, SharingStarted.Eagerly, DEFAULT_REPOS)
 
     init {
         scanExtensions()
-        refreshAvailableExtensions()
     }
 
+    /** Re-scans [extensionsDir] for manifest/code pairs. Call after copying a new
+     *  extension into place (e.g. from a file picker or a share-target unzip step). */
     fun scanExtensions() {
-        _installedFiles.value = extensionsDir.listFiles { _, name ->
-            name.endsWith(".apk")
-        }?.toList() ?: emptyList()
+        val manifestFiles = extensionsDir.listFiles { f -> f.extension == "json" } ?: emptyArray()
+
+        val found = manifestFiles.mapNotNull { manifestFile ->
+            runCatching {
+                val manifest = json.decodeFromString<ExtensionManifest>(manifestFile.readText())
+                val codeFile = File(extensionsDir, "${manifest.pkgName}.dex")
+                    .takeIf { it.exists() }
+                    ?: File(extensionsDir, "${manifest.pkgName}.jar").takeIf { it.exists() }
+                    ?: return@mapNotNull null
+                manifest.pkgName to DiscoveredExtension(manifest, codeFile)
+            }.getOrNull()
+        }.toMap()
+
+        // Drop cached classloaders/sources for extensions that disappeared since the last scan.
+        val removed = discoveredFlow.value.keys - found.keys
+        removed.forEach {
+            sourcesCache.remove(it)
+            classLoaderCache.remove(it)
+        }
+        discoveredFlow.value = found
     }
 
-    fun refreshAvailableExtensions() {
-        scope.launch(Dispatchers.IO) {
-            val allRemote = mutableListOf<RemoteExtension>()
-            repos.value.forEach { url ->
-                try {
-                    val request = Request.Builder().url(url).build()
-                    httpClient.newCall(request).execute().use { response ->
-                        if (response.isSuccessful) {
-                            val body = response.body?.string() ?: ""
-                            allRemote.addAll(json.decodeFromString<List<RemoteExtension>>(body))
-                        }
-                    }
-                } catch (e: Exception) { e.printStackTrace() }
+    suspend fun setEnabled(pkgName: String, enabled: Boolean) {
+        context.extensionPrefs.edit { it[enabledKey(pkgName)] = enabled }
+    }
+
+    /**
+     * Dynamically loads (and caches) the sources contributed by [pkgName] via its
+     * declared [SourceFactory], or returns an empty list if it's unknown or fails
+     * to load. Safe to call repeatedly — only the first call per package pays for
+     * the classloading.
+     */
+    suspend fun loadSources(pkgName: String): List<MediaSource> = withContext(Dispatchers.IO) {
+        sourcesCache[pkgName]?.let { return@withContext it }
+        val discovered = discoveredFlow.value[pkgName] ?: return@withContext emptyList()
+
+        runCatching {
+            val classLoader = classLoaderCache.getOrPut(pkgName) {
+                DexClassLoader(
+                    discovered.codeFile.absolutePath,
+                    codeCacheDir.absolutePath,
+                    null,
+                    context.classLoader,
+                )
             }
-            _availableExtensions.value = allRemote
-        }
+            val factory = classLoader
+                .loadClass(discovered.manifest.factoryClass)
+                .getDeclaredConstructor()
+                .newInstance() as SourceFactory
+            factory.createSources()
+        }.onSuccess { sourcesCache[pkgName] = it }.getOrDefault(emptyList())
     }
 
-    suspend fun downloadExtension(remote: RemoteExtension) {
-        if (_downloadingState.value.containsKey(remote.pkg)) return
-        withContext(Dispatchers.IO) {
-            _downloadingState.update { it + (remote.pkg to 0f) }
-            val url = "https://raw.githubusercontent.com/keiyoushi/extensions/repo/apk/${remote.apk}"
-            try {
-                httpClient.newCall(Request.Builder().url(url).build()).execute().use { response ->
-                    if (!response.isSuccessful) return@withContext
-                    val body = response.body ?: return@withContext
-                    val total = body.contentLength()
-                    val file = File(extensionsDir, "${remote.pkg}.apk")
-                    body.byteStream().use { input ->
-                        file.outputStream().use { output ->
-                            val buffer = ByteArray(8 * 1024)
-                            var read: Int
-                            var totalRead = 0L
-                            while (input.read(buffer).also { read = it } != -1) {
-                                output.write(buffer, 0, read)
-                                totalRead += read
-                                if (total > 0) _downloadingState.update { it + (remote.pkg to totalRead.toFloat() / total) }
-                            }
-                        }
-                    }
-                    scanExtensions()
-                }
-            } catch (e: Exception) { e.printStackTrace() }
-            finally { _downloadingState.update { it - remote.pkg } }
-        }
-    }
-
-    suspend fun addRepo(url: String) {
-        context.extensionDataStore.edit { it[stringSetPreferencesKey("repos")] = (it[stringSetPreferencesKey("repos")] ?: DEFAULT_REPOS) + url }
-        refreshAvailableExtensions()
-    }
-
-    suspend fun toggleExtension(pkgName: String, enabled: Boolean) {
-        context.extensionDataStore.edit { it[booleanPreferencesKey(pkgName)] = enabled }
-    }
-
-    fun deleteExtension(extension: Extension) {
-        extension.file?.delete()
+    /** Removes an extension's manifest and code from disk and forgets any cached sources. */
+    fun deleteExtension(pkgName: String) {
+        File(extensionsDir, "$pkgName.json").delete()
+        File(extensionsDir, "$pkgName.dex").delete()
+        File(extensionsDir, "$pkgName.jar").delete()
+        sourcesCache.remove(pkgName)
+        classLoaderCache.remove(pkgName)
         scanExtensions()
     }
-
-    /** Bridges Tachiyomi-style extensions to our native [MediaSource] system. */
-    fun loadSource(extension: Extension): MediaSource? {
-        if (!extension.isEnabled) return null
-        
-        return when {
-            extension.pkgName.contains("batcave") -> BatcaveSource(httpClient)
-            extension.pkgName.contains("readcomiconline") -> ReadComicOnlineSource(httpClient)
-            else -> null
-        }
-    }
-}
-
-/** Helper to fetch JSoup document using OkHttp for interceptor support. */
-private suspend fun OkHttpClient.fetchDoc(url: String): org.jsoup.nodes.Document = withContext(Dispatchers.IO) {
-    val request = Request.Builder().url(url).build()
-    newCall(request).execute().use { response ->
-        if (!response.isSuccessful) throw java.io.IOException("Unexpected code $response")
-        Jsoup.parse(response.body?.string() ?: "", url)
-    }
-}
-
-/** Implementation for Batcave.biz scraping. */
-class BatcaveSource(private val client: OkHttpClient) : MediaSource {
-    override val id = "batcave"
-    override val name = "Batcave"
-    override val mediaType = MediaType.COMIC
-
-    override suspend fun fetchLatestUpdates(): List<SourceMediaInfo> = try {
-        val doc = client.fetchDoc("https://batcave.biz/")
-        doc.select(".post-item").map { element ->
-            SourceMediaInfo(
-                sourceMediaId = element.select("a").first()?.attr("abs:href") ?: "",
-                title = element.select(".post-title").text(),
-                author = "Unknown",
-                coverUrl = element.select("img").attr("src")
-            )
-        }
-    } catch (e: Exception) {
-        e.printStackTrace()
-        emptyList()
-    }
-
-    override suspend fun fetchMediaDetails(sourceMediaId: String) = SourceMediaDetails(sourceMediaId, "Title", "Author", "Desc", null, null)
-    override suspend fun fetchChapterList(sourceMediaId: String) = emptyList<SourceChapter>()
-    override suspend fun fetchPageList(chapterId: String) = emptyList<SourcePage>()
-}
-
-/** Implementation for ReadComicOnline.li scraping. */
-class ReadComicOnlineSource(private val client: OkHttpClient) : MediaSource {
-    override val id = "readcomiconline"
-    override val name = "ReadComicOnline"
-    override val mediaType = MediaType.COMIC
-
-    override suspend fun fetchLatestUpdates(): List<SourceMediaInfo> = try {
-        val doc = client.fetchDoc("https://readcomiconline.li/")
-        doc.select(".item").map { element ->
-            SourceMediaInfo(
-                sourceMediaId = element.select("a").first()?.attr("abs:href") ?: "",
-                title = element.select(".title").text(),
-                author = "Unknown",
-                coverUrl = element.select("img").attr("src")
-            )
-        }
-    } catch (e: Exception) {
-        e.printStackTrace()
-        emptyList()
-    }
-
-    override suspend fun fetchMediaDetails(sourceMediaId: String) = SourceMediaDetails(sourceMediaId, "Title", "Author", "Desc", null, null)
-    override suspend fun fetchChapterList(sourceMediaId: String) = emptyList<SourceChapter>()
-    override suspend fun fetchPageList(chapterId: String) = emptyList<SourcePage>()
 }

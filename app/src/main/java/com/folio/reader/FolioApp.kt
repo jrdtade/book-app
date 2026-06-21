@@ -25,7 +25,7 @@ class FolioApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        extensionManager = ExtensionManager(this, appScope, httpClient)
+        extensionManager = ExtensionManager(this, appScope)
         repository = BookRepository(this, extensionManager, appScope)
         readerPrefsRepository = ReaderPrefsRepository(this)
         userPrefsRepository = UserPrefsRepository(this)

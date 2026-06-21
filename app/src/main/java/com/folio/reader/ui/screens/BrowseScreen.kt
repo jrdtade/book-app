@@ -7,11 +7,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -33,7 +29,6 @@ fun BrowseScreen(
     modifier: Modifier = Modifier
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
-    var searchQuery by remember { mutableStateOf("") }
     val tabs = listOf("Sources", "Extensions")
 
     Column(modifier = modifier.fillMaxSize().padding(top = 16.dp)) {
@@ -45,43 +40,9 @@ fun BrowseScreen(
 
         Spacer(Modifier.height(16.dp))
 
-        OutlinedTextField(
-            value = searchQuery,
-            onValueChange = { searchQuery = it },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            placeholder = { Text("Search ${tabs[selectedTab].lowercase()}...") },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-            trailingIcon = {
-                if (searchQuery.isNotEmpty()) {
-                    IconButton(onClick = { searchQuery = "" }) {
-                        Icon(Icons.Default.Clear, contentDescription = "Clear search")
-                    }
-                }
-            },
-            shape = CircleShape,
-            singleLine = true,
-            colors = OutlinedTextFieldDefaults.colors(
-                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                unfocusedBorderColor = Color.Transparent,
-                focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
-            )
-        )
-
-        Spacer(Modifier.height(16.dp))
-
         when (selectedTab) {
-            0 -> {
-                val filteredSources = remember(sources, searchQuery) {
-                    sources.filter { it.name.contains(searchQuery, ignoreCase = true) }
-                }
-                SourcesTab(filteredSources, onSourceClick)
-            }
-            1 -> {
-                ExtensionsTab(extensionManager, searchQuery)
-            }
+            0 -> SourcesTab(sources, onSourceClick)
+            1 -> ExtensionsTab(extensionManager)
         }
     }
 }
@@ -123,19 +84,19 @@ private fun PillTabRow(
     }
 }
 
+/** Enabled sources only — what the rest of the app (library/search) can actually use. */
 @Composable
 private fun SourcesTab(
     sources: List<MediaSource>,
     onSourceClick: (MediaSource) -> Unit
 ) {
-    LazyColumn(modifier = Modifier.fillMaxSize()) {
-        if (sources.isEmpty()) {
-            item {
-                Box(Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("No sources enabled", style = MaterialTheme.typography.bodyLarge)
-                }
-            }
+    if (sources.isEmpty()) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("No sources enabled", style = MaterialTheme.typography.bodyLarge)
         }
+        return
+    }
+    LazyColumn(modifier = Modifier.fillMaxSize()) {
         items(sources, key = { it.id }) { source ->
             ListItem(
                 headlineContent = { Text(source.name) },
@@ -146,125 +107,47 @@ private fun SourcesTab(
     }
 }
 
+/** Every extension found in the local extensions directory, enabled or not. */
 @Composable
-private fun ExtensionsTab(extensionManager: ExtensionManager, searchQuery: String) {
-    val allExtensions by extensionManager.extensions.collectAsState()
+private fun ExtensionsTab(extensionManager: ExtensionManager) {
+    val extensions by extensionManager.extensions.collectAsState()
     val scope = rememberCoroutineScope()
-    var showAddRepoDialog by remember { mutableStateOf(false) }
 
-    val extensions = remember(allExtensions, searchQuery) {
-        if (searchQuery.isBlank()) allExtensions
-        else allExtensions.filter { it.name.contains(searchQuery, ignoreCase = true) }
+    if (extensions.isEmpty()) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("No extensions found", style = MaterialTheme.typography.bodyLarge)
+        }
+        return
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        LazyColumn(modifier = Modifier.fillMaxSize()) {
-            items(extensions, key = { it.pkgName }) { extension ->
-                ExtensionItem(
-                    extension = extension,
-                    onToggle = { enabled ->
-                        scope.launch { extensionManager.toggleExtension(extension.pkgName, enabled) }
-                    },
-                    onDelete = {
-                        extensionManager.deleteExtension(extension)
-                    },
-                    onInstall = {
-                        scope.launch {
-                            extension.remoteInfo?.let { extensionManager.downloadExtension(it) }
-                        }
-                    }
-                )
-            }
-            item {
-                Spacer(Modifier.height(80.dp))
-            }
+    LazyColumn(modifier = Modifier.fillMaxSize()) {
+        items(extensions, key = { it.pkgName }) { extension ->
+            ExtensionRow(
+                extension = extension,
+                onToggle = { enabled ->
+                    scope.launch { extensionManager.setEnabled(extension.pkgName, enabled) }
+                },
+                onDelete = { extensionManager.deleteExtension(extension.pkgName) }
+            )
         }
-
-        FloatingActionButton(
-            onClick = { showAddRepoDialog = true },
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(16.dp),
-            containerColor = MaterialTheme.colorScheme.primaryContainer
-        ) {
-            Icon(Icons.Default.Add, contentDescription = "Add Repository")
-        }
-    }
-
-    if (showAddRepoDialog) {
-        var repoUrl by remember { mutableStateOf("") }
-        AlertDialog(
-            onDismissRequest = { showAddRepoDialog = false },
-            title = { Text("Add Extension Repository") },
-            text = {
-                OutlinedTextField(
-                    value = repoUrl,
-                    onValueChange = { repoUrl = it },
-                    label = { Text("Repository JSON URL") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    if (repoUrl.isNotBlank()) {
-                        scope.launch {
-                            extensionManager.addRepo(repoUrl)
-                            showAddRepoDialog = false
-                        }
-                    }
-                }) {
-                    Text("Add")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showAddRepoDialog = false }) {
-                    Text("Cancel")
-                }
-            }
-        )
     }
 }
 
 @Composable
-private fun ExtensionItem(
+private fun ExtensionRow(
     extension: Extension,
     onToggle: (Boolean) -> Unit,
-    onDelete: () -> Unit,
-    onInstall: () -> Unit
+    onDelete: () -> Unit
 ) {
     ListItem(
         headlineContent = { Text(extension.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-        supportingContent = { 
-            if (extension.isDownloading) {
-                LinearProgressIndicator(
-                    progress = extension.progress,
-                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
-                )
-            } else {
-                Text(
-                    if (extension.isInstalled) "v${extension.version} • ${if (extension.isEnabled) "Enabled" else "Disabled"}"
-                    else "Available • v${extension.version}"
-                )
-            }
-        },
+        supportingContent = { Text("v${extension.version} • ${extension.lang}") },
         trailingContent = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (extension.isInstalled) {
-                    Switch(
-                        checked = extension.isEnabled,
-                        onCheckedChange = onToggle
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    IconButton(onClick = onDelete) {
-                        Icon(Icons.Default.Delete, contentDescription = "Uninstall")
-                    }
-                } else if (!extension.isDownloading) {
-                    Button(onClick = onInstall, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)) {
-                        Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("Install")
-                    }
+                Switch(checked = extension.isEnabled, onCheckedChange = onToggle)
+                Spacer(Modifier.width(8.dp))
+                IconButton(onClick = onDelete) {
+                    Icon(Icons.Default.Delete, contentDescription = "Remove extension")
                 }
             }
         }

@@ -23,10 +23,17 @@ class SourceRegistry(
         StubNetworkSource(id = "stub_manga_network", name = "Network (stub)", mediaType = MediaType.MANGA),
     )
 
-    /** Reactively update the list of available sources based on which extensions are enabled. */
-    val sources: StateFlow<List<MediaSource>> = extensionManager.extensions.map { extensions ->
-        builtInSources + extensions.filter { it.isEnabled }.mapNotNull { extensionManager.loadSource(it) }
-    }.stateIn(scope, SharingStarted.Eagerly, builtInSources)
+    /** Reactively rebuilds whenever an extension is discovered, removed, or toggled.
+     *  Only enabled extensions get their [com.folio.reader.extension.SourceFactory]
+     *  dynamically loaded; disabled ones are skipped entirely. */
+    val sources: StateFlow<List<MediaSource>> = extensionManager.extensions
+        .map { extensions ->
+            val extensionSources = extensions
+                .filter { it.isEnabled }
+                .flatMap { extensionManager.loadSources(it.pkgName) }
+            builtInSources + extensionSources
+        }
+        .stateIn(scope, SharingStarted.Eagerly, builtInSources)
 
     fun byId(sourceId: String): MediaSource? = sources.value.firstOrNull { it.id == sourceId }
 
