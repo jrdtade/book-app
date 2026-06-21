@@ -7,7 +7,10 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
@@ -28,8 +31,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.navigation.NavDestination.Companion.hierarchy
+import kotlinx.coroutines.launch
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -58,6 +62,7 @@ sealed class Tab(val route: String, val label: String) {
 }
 
 private val tabs = listOf(Tab.Reading, Tab.Library, Tab.Stats)
+private const val TABS_ROUTE = "tabs"
 
 class MainActivity : ComponentActivity() {
     var pendingImportUri by mutableStateOf<Uri?>(null)
@@ -110,12 +115,24 @@ fun FolioAppRoot(
 
     val navController = rememberNavController()
     val libraryViewModel: LibraryViewModel = folioViewModel()
+    val pagerState = rememberPagerState(pageCount = { tabs.size })
+    val scope = rememberCoroutineScope()
 
     fun navigateToTab(route: String) {
-        navController.navigate(route) {
-            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-            launchSingleTop = true
-            restoreState = true
+        if (tabs.any { it.route == route }) {
+            val index = tabs.indexOfFirst { it.route == route }
+            navController.navigate(TABS_ROUTE) {
+                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                launchSingleTop = true
+                restoreState = true
+            }
+            scope.launch { pagerState.animateScrollToPage(index) }
+        } else {
+            navController.navigate(route) {
+                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                launchSingleTop = true
+                restoreState = true
+            }
         }
     }
 
@@ -127,7 +144,7 @@ fun FolioAppRoot(
 
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
-    val showTabBar = currentRoute == null || tabs.any { it.route == currentRoute }
+    val showTabBar = currentRoute == null || currentRoute == TABS_ROUTE
 
     Scaffold(
         topBar = {
@@ -145,19 +162,21 @@ fun FolioAppRoot(
         bottomBar = {
             if (showTabBar) {
                 NavigationBar {
-                    val current = navController.currentBackStackEntry?.destination
-                    tabs.forEach { tab ->
-                        val selected = current?.hierarchy?.any { it.route == tab.route } == true
+                    tabs.forEachIndexed { index, tab ->
+                        val selected = currentRoute == TABS_ROUTE && pagerState.currentPage == index
                         NavigationBarItem(
                             selected = selected,
-                            onClick = { navigateToTab(tab.route) },
+                            onClick = {
+                                if (currentRoute != TABS_ROUTE) navigateToTab(tab.route)
+                                else scope.launch { pagerState.animateScrollToPage(index) }
+                            },
                             icon = {
                                 Icon(
                                     when (tab) {
                                         Tab.Reading -> Icons.Filled.Home
                                         Tab.Library -> Icons.Outlined.LibraryBooks
                                         Tab.Stats -> Icons.Filled.Equalizer
-                                        Tab.Settings -> Icons.Filled.AccountCircle
+                                        else -> Icons.Filled.Home
                                     },
                                     contentDescription = tab.label,
                                 )
@@ -171,20 +190,23 @@ fun FolioAppRoot(
     ) { padding ->
         NavHost(
             navController = navController,
-            startDestination = Tab.Reading.route,
+            startDestination = TABS_ROUTE,
             modifier = Modifier.padding(if (showTabBar) padding else PaddingValues(0.dp)),
         ) {
-            composable(Tab.Reading.route) {
-                HomeScreen(
-                    openBook = { id -> navController.navigate("detail/$id") },
-                    openReader = { id -> navController.navigate("reader/$id") },
-                    goToTab = { route -> navigateToTab(route) },
-                )
+            composable(TABS_ROUTE) {
+                HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
+                    when (tabs[page]) {
+                        Tab.Reading -> HomeScreen(
+                            openBook = { id -> navController.navigate("detail/$id") },
+                            openReader = { id -> navController.navigate("reader/$id") },
+                            goToTab = { route -> navigateToTab(route) },
+                        )
+                        Tab.Library -> LibraryScreen(openBook = { id -> navController.navigate("detail/$id") })
+                        Tab.Stats -> StatsScreen()
+                        else -> Unit
+                    }
+                }
             }
-            composable(Tab.Library.route) {
-                LibraryScreen(openBook = { id -> navController.navigate("detail/$id") })
-            }
-            composable(Tab.Stats.route) { StatsScreen() }
             composable(Tab.Settings.route) { SettingsScreen(back = { navController.popBackStack() }) }
             composable(
                 "detail/{bookId}",
