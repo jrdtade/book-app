@@ -10,6 +10,8 @@ import eu.kanade.tachiyomi.network.NetworkHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.protobuf.ProtoBuf
 import okhttp3.OkHttpClient
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.InjektModule
@@ -32,14 +34,23 @@ class FolioApp : Application() {
     override fun onCreate() {
         super.onCreate()
 
-        // Real extensions resolve `Injekt.get<Application>()` / `Injekt.get<NetworkHelper>()`
-        // themselves (e.g. for login SharedPreferences or a shared OkHttpClient) — these
-        // bindings make those calls return working instances instead of throwing.
+        // Real extensions (and their shared "keiyoushi.lib.*"/"keiyoushi.utils.*" helper
+        // code) resolve these directly via `Injekt.get<T>()`/`by injectLazy()` themselves.
+        // Mirrors Mihon's own AppModule registrations exactly (same Json/ProtoBuf config) —
+        // a class's static initializer touching Injekt.get<Json>() with no binding throws
+        // ExceptionInInitializerError, which is what was happening before this was added.
         Injekt.importModule(
             object : InjektModule {
                 override fun InjektRegistrar.registerInjectables() {
                     addSingleton(this@FolioApp as Application)
                     addSingletonFactory { NetworkHelper(this@FolioApp, httpClient) }
+                    addSingletonFactory {
+                        Json {
+                            ignoreUnknownKeys = true
+                            explicitNulls = false
+                        }
+                    }
+                    addSingletonFactory<ProtoBuf> { ProtoBuf }
                 }
             },
         )
