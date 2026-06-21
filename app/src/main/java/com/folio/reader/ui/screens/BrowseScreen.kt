@@ -246,9 +246,7 @@ private fun ExtensionRow(
                     Text(
                         "Failed to load: ${extension.loadError}",
                         color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
+                        style = MaterialTheme.typography.bodySmall
                     )
                 }
             }

@@ -376,7 +376,7 @@ class ExtensionManager(
         check(classNames.isNotEmpty()) { "Empty extension class value in ${discovered.codeFile.name}" }
 
         val classLoader = obtainClassLoader(discovered)
-        var anySucceeded = false
+        val failures = mutableListOf<Pair<String, Throwable>>()
         val results = classNames.flatMap { rawName ->
             val className = if (rawName.startsWith(".")) realPkgName + rawName else rawName
             // One multi-source extension declares several classes; a single one
@@ -389,11 +389,23 @@ class ExtensionManager(
                     is TachiyomiSource -> listOf(TachiyomiSourceAdapter(instance))
                     else -> error("$className implements neither Source nor SourceFactory (was ${instance.javaClass.name})")
                 }
-            }.onSuccess { anySucceeded = true }
-                .onFailure { e -> Log.e(TAG, "Failed to instantiate $className", e) }
-                .getOrDefault(emptyList())
+            }.onFailure { e ->
+                // Reflection wraps the real failure in InvocationTargetException — unwrap
+                // it so the message that reaches the UI is the actual cause (commonly a
+                // NoClassDefFoundError/ExceptionInInitializerError when the extension
+                // touches something our Tachiyomi shim doesn't replicate), not a useless
+                // "InvocationTargetException: null".
+                val rootCause = generateSequence(e) { it.cause }.last()
+                Log.e(TAG, "Failed to instantiate $className", e)
+                failures += className to rootCause
+            }.getOrDefault(emptyList())
         }
-        check(anySucceeded) { "All ${classNames.size} declared class(es) failed to instantiate — see logcat for per-class errors" }
+        check(failures.size < classNames.size) {
+            val summary = failures.joinToString("; ") { (name, cause) ->
+                "$name: ${cause.javaClass.simpleName}: ${cause.message}"
+            }
+            "All ${classNames.size} declared class(es) failed to instantiate — $summary"
+        }
         return results
     }
 
