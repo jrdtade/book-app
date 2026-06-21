@@ -27,6 +27,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.net.URI
+import java.util.concurrent.TimeUnit
 import eu.kanade.tachiyomi.source.Source as TachiyomiSource
 import eu.kanade.tachiyomi.source.SourceFactory as TachiyomiSourceFactory
 
@@ -122,10 +123,20 @@ class ExtensionManager(
     private val codeCacheDir = File(context.codeCacheDir, "extension_opt").apply { mkdirs() }
     private val json = Json { ignoreUnknownKeys = true }
 
+    /** Index fetches are a one-shot ~0.5MB download, much bigger than the typical
+     *  scraping request [httpClient] is tuned for — give it more headroom than the
+     *  shared 15s read timeout so a slow connection doesn't masquerade as "no
+     *  extensions available". */
+    private val indexFetchClient = httpClient.newBuilder()
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .build()
+
     private val discoveredFlow = MutableStateFlow<Map<String, DiscoveredExtension>>(emptyMap())
     private val remoteEntriesFlow = MutableStateFlow<List<RemoteExtensionEntry>>(emptyList())
     private val installingFlow = MutableStateFlow<Set<String>>(emptySet())
     private val loadErrorFlow = MutableStateFlow<Map<String, String>>(emptyMap())
+    private val repoFetchErrorFlow = MutableStateFlow<String?>(null)
 
     /** Cached, already dynamically-loaded sources, by package name, so toggling an
      *  extension on and off doesn't reload its code every time. */
@@ -221,25 +232,38 @@ class ExtensionManager(
         discoveredFlow.value = found
     }
 
+    /** Surfaced in the Extensions tab so a failed repo fetch is never just a
+     *  silently-empty list — null once at least one repo has loaded successfully. */
+    val repoFetchError: StateFlow<String?> = repoFetchErrorFlow
+
     /** Re-fetches the index.min.json of every saved repo and merges the results. */
     fun refreshExtensions() {
         scope.launch { refreshAvailableExtensions() }
     }
 
     private suspend fun refreshAvailableExtensions() = withContext(Dispatchers.IO) {
+        val errors = mutableListOf<String>()
+
         val entries = repos.value.flatMap { repo ->
             runCatching {
                 val request = Request.Builder().url(repo.url).build()
-                httpClient.newCall(request).execute().use { response ->
-                    if (!response.isSuccessful) return@use emptyList()
-                    val body = response.body?.string().orEmpty()
+                indexFetchClient.newCall(request).execute().use { response ->
+                    check(response.isSuccessful) { "HTTP ${response.code} ${response.message}".trim() }
+                    val body = checkNotNull(response.body) { "empty response body" }.string()
                     val dtos = json.decodeFromString<List<RemoteExtensionDto>>(body)
                     val baseUrl = repo.url.substringBeforeLast('/') + "/"
                     dtos.map { RemoteExtensionEntry(baseUrl, it) }
                 }
+            }.onFailure { e ->
+                Log.e(TAG, "Failed to fetch extension index from ${repo.url}", e)
+                errors += "${repo.url}: ${e.message ?: e.javaClass.simpleName}"
             }.getOrDefault(emptyList())
         }
+
         remoteEntriesFlow.value = entries
+        // Only surface the error if it actually left us with nothing to show —
+        // one repo failing while another succeeds isn't worth alarming over.
+        repoFetchErrorFlow.value = if (entries.isEmpty() && errors.isNotEmpty()) errors.joinToString("; ") else null
     }
 
     /** Adds a custom repo if [url] is a well-formed http(s) URL. Returns false (and

@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
@@ -150,6 +151,7 @@ private fun SourcesTab(
 @Composable
 private fun ExtensionsTab(extensionManager: ExtensionManager, searchQuery: String) {
     val allExtensions by extensionManager.extensions.collectAsState()
+    val repoFetchError by extensionManager.repoFetchError.collectAsState()
     val scope = rememberCoroutineScope()
     var showRepoDialog by remember { mutableStateOf(false) }
 
@@ -161,12 +163,42 @@ private fun ExtensionsTab(extensionManager: ExtensionManager, searchQuery: Strin
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.End
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
+            TextButton(onClick = { extensionManager.refreshExtensions() }) {
+                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Refresh")
+            }
             TextButton(onClick = { showRepoDialog = true }) {
                 Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
                 Text("Repositories")
+            }
+        }
+
+        if (repoFetchError != null) {
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        "Couldn't fetch the extension list",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                    Text(
+                        repoFetchError ?: "",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                    TextButton(
+                        onClick = { extensionManager.refreshExtensions() },
+                        modifier = Modifier.align(Alignment.End)
+                    ) { Text("Retry") }
+                }
             }
         }
 
