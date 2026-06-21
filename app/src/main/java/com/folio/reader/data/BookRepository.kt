@@ -10,6 +10,8 @@ import com.folio.reader.network.CoverCandidate
 import com.folio.reader.network.GeminiApi
 import com.folio.reader.network.OpenLibraryApi
 import com.folio.reader.extension.ExtensionManager
+import com.folio.reader.source.MediaSource
+import com.folio.reader.source.SourceChapter
 import com.folio.reader.source.SourceRegistry
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -43,6 +45,94 @@ class BookRepository(
     fun observeCollections(): Flow<List<Shelf>> = collectionDao.observeAll()
     fun observeCollectionIdsForBook(bookId: String): Flow<List<String>> = collectionDao.observeCollectionIdsForBook(bookId)
     fun observeBookIdsInCollection(collectionId: String): Flow<List<String>> = collectionDao.observeBookIdsInCollection(collectionId)
+    fun observeBooksBySource(sourceId: String): Flow<List<Book>> = bookDao.observeBySource(sourceId)
+
+    /** Stable id for a chapter downloaded from a source — same chapter always maps to the
+     *  same id, so re-downloading is a no-op and the UI can tell "downloaded" from "not yet"
+     *  without a separate tracking table. */
+    fun chapterBookId(sourceId: String, sourceMediaId: String, chapterId: String): String =
+        UUID.nameUUIDFromBytes("$sourceId::$sourceMediaId::$chapterId".toByteArray()).toString()
+
+    /**
+     * Downloads every page of [chapter] from [source] and stores it as its own [Book] —
+     * this app's existing reader/library model is "one Book = one readable archive", so a
+     * multi-chapter source series becomes one Book per downloaded chapter (the same way a
+     * single CBZ file already does), rather than introducing a separate series/chapter schema.
+     * A no-op if this chapter was already downloaded.
+     */
+    suspend fun downloadSourceChapter(
+        source: MediaSource,
+        sourceMediaId: String,
+        seriesTitle: String,
+        seriesAuthor: String,
+        seriesCoverUrl: String?,
+        chapter: SourceChapter,
+    ): Book = withContext(Dispatchers.IO) {
+        val bookId = chapterBookId(source.id, sourceMediaId, chapter.chapterId)
+        bookDao.get(bookId)?.let { return@withContext it }
+
+        val pages = source.fetchPageList(chapter.chapterId)
+        check(pages.isNotEmpty()) { "Source returned no pages for this chapter" }
+
+        val dir = File(context.filesDir, "books/$bookId").apply { mkdirs() }
+        val fileNames = pages.mapIndexed { index, page ->
+            val bytes = downloadPageBytes(page.contentPath)
+                ?: error("Failed to download page ${page.index} from ${page.contentPath}")
+            val ext = page.contentPath.substringAfterLast('.', "jpg")
+                .substringBefore('?')
+                .take(4)
+                .ifBlank { "jpg" }
+            val fileName = "page_${index.toString().padStart(4, '0')}.$ext"
+            File(dir, fileName).writeBytes(bytes)
+            fileName
+        }
+
+        val coverPath = seriesCoverUrl?.let { url ->
+            downloadPageBytes(url)?.let { bytes ->
+                File(dir, "cover.jpg").writeBytes(bytes)
+                "cover.jpg"
+            }
+        }
+
+        val palette = COVER_PALETTES[Math.abs(seriesTitle.hashCode()) % COVER_PALETTES.size]
+        val book = Book(
+            id = bookId,
+            title = "$seriesTitle — ${chapter.title}",
+            author = seriesAuthor,
+            mediaType = source.mediaType,
+            sourceId = source.id,
+            contentDir = dir.absolutePath,
+            coverPath = coverPath,
+            spine = fileNames.joinToString("\n"),
+            chapterCount = fileNames.size.coerceAtLeast(1),
+            status = ReadStatus.WANT,
+            readingMode = if (source.mediaType == MediaType.MANGA) ReadingMode.PAGED_RTL else ReadingMode.PAGED_LTR,
+            coverColorA = palette.first,
+            coverColorB = palette.second,
+        )
+        bookDao.upsert(book)
+        book
+    }
+
+    /** [contentPath] is usually a remote image URL (extension sources); falls back to
+     *  treating it as a local file path for any source that already has the file on disk. */
+    private fun downloadPageBytes(contentPath: String): ByteArray? {
+        if (!contentPath.startsWith("http")) {
+            return File(contentPath).takeIf { it.exists() }?.readBytes()
+        }
+        val connection = URL(contentPath).openConnection() as HttpURLConnection
+        return try {
+            connection.connectTimeout = 20_000
+            connection.readTimeout = 20_000
+            connection.setRequestProperty("User-Agent", com.folio.reader.network.NetworkConstants.USER_AGENT)
+            if (connection.responseCode != HttpURLConnection.HTTP_OK) return null
+            connection.inputStream.use { it.readBytes() }
+        } catch (_: Exception) {
+            null
+        } finally {
+            connection.disconnect()
+        }
+    }
 
     suspend fun importEpub(uri: Uri): Book {
         val parsed = EpubParser.import(context, uri)

@@ -16,6 +16,10 @@ interface BookDao {
     @Query("SELECT * FROM books WHERE mediaType = :mediaType ORDER BY addedAt DESC")
     fun observeByType(mediaType: MediaType): Flow<List<Book>>
 
+    /** Every downloaded chapter belonging to a source (each chapter is its own [Book] row). */
+    @Query("SELECT * FROM books WHERE sourceId = :sourceId ORDER BY addedAt DESC")
+    fun observeBySource(sourceId: String): Flow<List<Book>>
+
     @Query("SELECT * FROM books WHERE id = :id")
     suspend fun get(id: String): Book?
 

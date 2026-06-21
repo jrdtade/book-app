@@ -56,6 +56,7 @@ import com.folio.reader.ui.screens.ReaderScreen
 import com.folio.reader.ui.screens.SettingsScreen
 import com.folio.reader.ui.screens.BrowseScreen
 import com.folio.reader.ui.screens.SourceBrowseScreen
+import com.folio.reader.ui.screens.SourceMediaDetailScreen
 import com.folio.reader.ui.screens.StatsScreen
 import com.folio.reader.ui.theme.FolioTheme
 import androidx.compose.material.icons.filled.Explore
@@ -271,7 +272,28 @@ fun FolioAppRoot(
                 SourceBrowseScreen(
                     source = source,
                     back = { navController.popBackStack() },
-                    onMediaClick = { /* TODO: Open media detail from source */ }
+                    onMediaClick = { media ->
+                        val encodedMediaId = Uri.encode(media.sourceMediaId)
+                        navController.navigate("source_media/$id/$encodedMediaId")
+                    }
+                )
+            }
+            composable(
+                "source_media/{sourceId}/{mediaId}",
+                arguments = listOf(
+                    navArgument("sourceId") { type = NavType.StringType },
+                    navArgument("mediaId") { type = NavType.StringType },
+                ),
+            ) { entry ->
+                val sourceId = entry.arguments?.getString("sourceId") ?: return@composable
+                val encodedMediaId = entry.arguments?.getString("mediaId") ?: return@composable
+                val source = app.repository.sourceRegistry.byId(sourceId) ?: return@composable
+                SourceMediaDetailScreen(
+                    source = source,
+                    sourceMediaId = Uri.decode(encodedMediaId),
+                    repository = app.repository,
+                    back = { navController.popBackStack() },
+                    onOpenBook = { bookId -> navController.navigate("reader/$bookId") }
                 )
             }
         }
