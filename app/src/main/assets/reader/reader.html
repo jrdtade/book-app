@@ -7,10 +7,11 @@
   html, body { margin:0; padding:0; height:100%; width:100%; overflow:hidden; background:transparent; }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; -webkit-user-select:none; user-select:none; }
   #content, #scrollContent { -webkit-user-select:text; user-select:text; }
-  #stage { position:fixed; inset:0; overflow:hidden; }
+  #stage { position:fixed; inset:0; overflow:hidden; perspective:1400px; }
   /* shifter slides horizontally; #stage clips. content must NOT clip or
      every column past the first is hidden (only first page was readable). */
-  #shifter { position:absolute; inset:0; will-change:transform; }
+  #shifter { position:absolute; inset:0; will-change:transform; transform-style:preserve-3d; backface-visibility:hidden; }
+  #curlShade { position:absolute; inset:0; pointer-events:none; opacity:0; z-index:4; }
   #content {
     position:absolute; inset:0; height:100%;
     column-fill:auto; -webkit-column-fill:auto; overflow:visible;
@@ -48,6 +49,7 @@
     <div id="scrollContent" style="display:none"></div>
     <div id="pageNum"></div>
     <div id="edge"></div>
+    <div id="curlShade"></div>
     <div class="warm-veil" id="warmVeil"></div>
     <div class="dim-veil" id="dimVeil"></div>
   </div>
@@ -117,9 +119,34 @@
 
   function setTransform(x, animate) {
     var sh = document.getElementById('shifter');
-    var dur = prefs.flip === 'curl' ? 520 : 360;
-    sh.style.transition = animate ? ('transform ' + dur + 'ms cubic-bezier(.25,.8,.25,1)') : 'none';
-    sh.style.transform = 'translateX(' + x + 'px)';
+    var shade = document.getElementById('curlShade');
+    var isCurl = prefs.flip === 'curl';
+    var dur = isCurl ? 520 : 360;
+    var props = isCurl ? 'transform ' + dur + 'ms cubic-bezier(.25,.8,.25,1), ' +
+      'opacity ' + dur + 'ms linear' : 'transform ' + dur + 'ms cubic-bezier(.25,.8,.25,1)';
+    sh.style.transition = animate ? props : 'none';
+    shade.style.transition = sh.style.transition;
+
+    if (isCurl) {
+      var stageW = stageWidth();
+      var baseX = -page * stageW;
+      var deviation = x - baseX;
+      var frac = stageW > 0 ? Math.max(-1, Math.min(1, deviation / stageW)) : 0;
+      var rot = -frac * 50;
+      sh.style.transformOrigin = (deviation < 0) ? 'right center' : 'left center';
+      sh.style.transform = 'translateX(' + x + 'px) rotateY(' + rot + 'deg)';
+      var shadeOpacity = Math.abs(frac) * 0.5;
+      shade.style.left = (deviation < 0) ? '0px' : 'auto';
+      shade.style.right = (deviation < 0) ? 'auto' : '0px';
+      shade.style.width = (Math.abs(frac) * stageW) + 'px';
+      shade.style.background = (deviation < 0)
+        ? 'linear-gradient(to left, rgba(0,0,0,' + shadeOpacity + '), rgba(0,0,0,0))'
+        : 'linear-gradient(to right, rgba(0,0,0,' + shadeOpacity + '), rgba(0,0,0,0))';
+      shade.style.opacity = '1';
+    } else {
+      sh.style.transform = 'translateX(' + x + 'px)';
+      shade.style.opacity = '0';
+    }
   }
 
   function goTo(p, animate) {
