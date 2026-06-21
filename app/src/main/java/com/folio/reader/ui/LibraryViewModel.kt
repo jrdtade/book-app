@@ -27,8 +27,9 @@ class LibraryViewModel(private val app: FolioApp) : ViewModel() {
 
     fun importEpub(uri: Uri, onComplete: (() -> Unit)? = null) {
         viewModelScope.launch {
-            runCatching { repo.importEpub(uri) }
+            val book = runCatching { repo.importEpub(uri) }.getOrNull()
             onComplete?.invoke()
+            if (book != null) viewModelScope.launch { runCatching { repo.classifyBook(book) } }
         }
     }
 

@@ -205,6 +205,8 @@ fun DetailScreen(bookId: String, back: () -> Unit, openReader: () -> Unit, openC
                         DRow("Author", book.author)
                         DRow("Chapters", "${book.chapterCount}")
                         if (book.publishedDate != null) DRow("Published", book.publishedDate!!)
+                        if (book.genre != null) DRow("Genre", book.genre!!)
+                        if (!book.tags.isNullOrBlank()) DRow("Tags", book.tags!!.split(",").joinToString(", "))
                         DRow("Status", book.status.name.lowercase().replaceFirstChar { it.uppercase() }, last = true)
                     }
                 }

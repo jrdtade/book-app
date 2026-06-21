@@ -5,6 +5,7 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import com.folio.reader.epub.EpubParser
 import com.folio.reader.network.CoverCandidate
+import com.folio.reader.network.GeminiApi
 import com.folio.reader.network.OpenLibraryApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -76,6 +77,17 @@ class BookRepository(private val context: Context) {
                 synopsis = synopsis,
                 synopsisFetchFailed = synopsis == null,
                 publishedDate = publishedDate ?: book.publishedDate,
+            ),
+        )
+    }
+
+    suspend fun classifyBook(book: Book) {
+        val result = GeminiApi.classify(book.title, book.author)
+        bookDao.update(
+            book.copy(
+                genre = result?.genre ?: book.genre,
+                tags = result?.tags?.joinToString(",") ?: book.tags,
+                classificationFetchFailed = result == null,
             ),
         )
     }

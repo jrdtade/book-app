@@ -16,7 +16,7 @@ class Converters {
 
 @Database(
     entities = [Book::class, Highlight::class, Bookmark::class, ReadingSession::class, Shelf::class, BookCollectionCrossRef::class],
-    version = 4,
+    version = 5,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)

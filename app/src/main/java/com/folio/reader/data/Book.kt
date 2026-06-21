@@ -31,6 +31,11 @@ data class Book(
     var synopsis: String? = null,
     var synopsisFetchFailed: Boolean = false,
     var publishedDate: String? = null,
+    /** Genre and descriptive tags classified by Gemini on import, cached locally once found. */
+    var genre: String? = null,
+    /** Comma-separated descriptive tags. */
+    var tags: String? = null,
+    var classificationFetchFailed: Boolean = false,
 )
 
 fun Book.overallProgress(): Float =
