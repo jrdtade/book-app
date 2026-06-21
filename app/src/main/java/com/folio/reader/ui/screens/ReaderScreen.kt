@@ -22,6 +22,9 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -293,14 +296,23 @@ fun ReaderScreen(bookId: String, back: () -> Unit) {
         }
 
         if (b.title.isNotBlank()) {
-            Text(
-                b.title,
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onBackground,
-                maxLines = 1,
-                modifier = Modifier.align(Alignment.TopCenter).padding(top = 14.dp).fillMaxWidth(0.7f),
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            )
+            Box(
+                Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .background(MaterialTheme.colorScheme.background.copy(alpha = 0.85f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    b.title,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    maxLines = 1,
+                    modifier = Modifier.padding(vertical = 12.dp).fillMaxWidth(0.7f),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                )
+            }
         }
 
         if (globalPage.total > 1) {
