@@ -350,26 +350,34 @@ class ExtensionManager(
         return factory.createSources()
     }
 
-    /** Mirrors Mihon's `ExtensionLoader`: read the apk's own `tachiyomi.extension.class`
-     *  meta-data (no real `pm install` needed — `getPackageArchiveInfo` parses any
-     *  apk file on disk) to find the class(es) to instantiate. */
+    /**
+     * Mirrors Mihon's `ExtensionLoader`: read the apk's own `tachiyomi.extension.class`
+     * meta-data (no real `pm install` needed — `getPackageArchiveInfo` parses any apk
+     * file on disk) to find the class(es) to instantiate. Every early exit here throws
+     * instead of returning an empty list — a "successful" empty list is indistinguishable
+     * from a genuinely sourceless extension, so it would hide the real failure from
+     * [loadSources]'s error tracking instead of surfacing it.
+     */
     private fun loadTachiyomiSources(discovered: DiscoveredExtension): List<MediaSource> {
         val pkgInfo = context.packageManager.getPackageArchiveInfo(
             discovered.codeFile.absolutePath,
             PackageManager.GET_META_DATA,
-        ) ?: return emptyList()
+        ) ?: error("Android couldn't parse ${discovered.codeFile.name} as an apk (getPackageArchiveInfo returned null)")
 
         val realPkgName = pkgInfo.packageName
-        val classNames = pkgInfo.applicationInfo
-            ?.metaData
-            ?.getString(TACHIYOMI_EXTENSION_CLASS_META_KEY)
-            ?.split(";", ",")
-            ?.map { it.trim() }
-            ?.filter { it.isNotEmpty() }
-            ?: return emptyList()
+        val metaData = pkgInfo.applicationInfo?.metaData
+        val rawClassValue = metaData?.getString(TACHIYOMI_EXTENSION_CLASS_META_KEY)
+            ?: error(
+                "No '$TACHIYOMI_EXTENSION_CLASS_META_KEY' meta-data in ${discovered.codeFile.name}" +
+                    " (found meta-data keys: ${metaData?.keySet()?.joinToString() ?: "none, applicationInfo missing"})",
+            )
+
+        val classNames = rawClassValue.split(";", ",").map { it.trim() }.filter { it.isNotEmpty() }
+        check(classNames.isNotEmpty()) { "Empty extension class value in ${discovered.codeFile.name}" }
 
         val classLoader = obtainClassLoader(discovered)
-        return classNames.flatMap { rawName ->
+        var anySucceeded = false
+        val results = classNames.flatMap { rawName ->
             val className = if (rawName.startsWith(".")) realPkgName + rawName else rawName
             // One multi-source extension declares several classes; a single one
             // failing (e.g. a base class our shim doesn't fully replicate)
@@ -379,11 +387,14 @@ class ExtensionManager(
                 when (instance) {
                     is TachiyomiSourceFactory -> instance.createSources().map { TachiyomiSourceAdapter(it) }
                     is TachiyomiSource -> listOf(TachiyomiSourceAdapter(instance))
-                    else -> emptyList()
+                    else -> error("$className implements neither Source nor SourceFactory (was ${instance.javaClass.name})")
                 }
-            }.onFailure { e -> Log.e(TAG, "Failed to instantiate $className", e) }
+            }.onSuccess { anySucceeded = true }
+                .onFailure { e -> Log.e(TAG, "Failed to instantiate $className", e) }
                 .getOrDefault(emptyList())
         }
+        check(anySucceeded) { "All ${classNames.size} declared class(es) failed to instantiate — see logcat for per-class errors" }
+        return results
     }
 
     /** Removes an extension's manifest and code from disk and forgets any cached sources. */
