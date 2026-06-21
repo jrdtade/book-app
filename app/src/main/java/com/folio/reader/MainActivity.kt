@@ -176,7 +176,7 @@ fun FolioAppRoot(
                 )
             }
             composable(
-                "cover-picker/{bookId}",
+                "cover_picker/{bookId}",
                 arguments = listOf(navArgument("bookId") { type = NavType.StringType }),
             ) { entry ->
                 val id = entry.arguments?.getString("bookId") ?: return@composable
@@ -188,16 +188,6 @@ fun FolioAppRoot(
             ) { entry ->
                 val id = entry.arguments?.getString("bookId") ?: return@composable
                 ReaderScreen(bookId = id, back = { navController.popBackStack() })
-            }
-            composable(
-                "cover_picker/{bookId}",
-                arguments = listOf(navArgument("bookId") { type = NavType.StringType }),
-            ) { entry ->
-                val id = entry.arguments?.getString("bookId") ?: return@composable
-                val book = libraryViewModel.books.collectAsState().value.firstOrNull { it.id == id }
-                if (book != null) {
-                    com.folio.reader.ui.screens.CoverPickerScreen(book = book, back = { navController.popBackStack() })
-                }
             }
         }
     }

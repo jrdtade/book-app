@@ -58,8 +58,7 @@ fun CoverPickerScreen(bookId: String, back: () -> Unit) {
                             @JavascriptInterface
                             fun onImagePicked(url: String) {
                                 picking = true
-                                vm.setCoverFromUrl(book, url)
-                                back()
+                                vm.applyCover(book, url, onComplete = back)
                             }
                         },
                         "CoverBridge",
