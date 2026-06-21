@@ -15,12 +15,14 @@ data class UserPrefs(
     val onboardingComplete: Boolean = false,
     val name: String = "",
     val annualGoal: Int = 24,
+    val dailyMinutesGoal: Int = 20,
 )
 
 private object UserPrefKeys {
     val ONBOARDED = booleanPreferencesKey("onboarded")
     val NAME = stringPreferencesKey("name")
     val ANNUAL_GOAL = intPreferencesKey("annual_goal")
+    val DAILY_MINUTES_GOAL = intPreferencesKey("daily_minutes_goal")
 }
 
 class UserPrefsRepository(private val context: Context) {
@@ -29,6 +31,7 @@ class UserPrefsRepository(private val context: Context) {
             onboardingComplete = p[UserPrefKeys.ONBOARDED] ?: false,
             name = p[UserPrefKeys.NAME] ?: "",
             annualGoal = p[UserPrefKeys.ANNUAL_GOAL] ?: 24,
+            dailyMinutesGoal = p[UserPrefKeys.DAILY_MINUTES_GOAL] ?: 20,
         )
     }
 
@@ -37,6 +40,7 @@ class UserPrefsRepository(private val context: Context) {
             p[UserPrefKeys.ONBOARDED] = prefs.onboardingComplete
             p[UserPrefKeys.NAME] = prefs.name
             p[UserPrefKeys.ANNUAL_GOAL] = prefs.annualGoal
+            p[UserPrefKeys.DAILY_MINUTES_GOAL] = prefs.dailyMinutesGoal
         }
     }
 }

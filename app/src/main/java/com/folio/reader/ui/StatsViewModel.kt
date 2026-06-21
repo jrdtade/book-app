@@ -20,11 +20,13 @@ data class StatsState(
     val goal: Int = 24,
     val currentStreak: Int = 0,
     val longestStreak: Int = 0,
-    val hoursThisWeek: Float = 0f,
+    val minutesThisWeek: Int = 0,
     val weekMinutes: List<Int> = listOf(0, 0, 0, 0, 0, 0, 0),
     val heat: List<Int> = List(18 * 7) { 0 },
     val pagesYear: Int = 0,
-    val hoursYear: Float = 0f,
+    val minutesYear: Int = 0,
+    val minutesToday: Int = 0,
+    val dailyMinutesGoal: Int = 20,
     val genreBreakdown: List<Pair<String, Int>> = emptyList(),
     val topAuthors: List<Pair<String, Int>> = emptyList(),
     val highlights: List<Highlight> = emptyList(),
@@ -37,12 +39,18 @@ class StatsViewModel(app: FolioApp) : ViewModel() {
     val state: StateFlow<StatsState> = combine(
         repo.observeBooks(), repo.observeSessions(), repo.observeHighlights(), userPrefsRepo.prefsFlow,
     ) { books, sessions, highlights, userPrefs ->
-        computeStats(books, sessions, highlights, userPrefs.annualGoal)
+        computeStats(books, sessions, highlights, userPrefs.annualGoal, userPrefs.dailyMinutesGoal)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), StatsState())
 
     private val dayFmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)
 
-    private fun computeStats(books: List<Book>, sessions: List<ReadingSession>, highlights: List<Highlight>, annualGoal: Int): StatsState {
+    private fun computeStats(
+        books: List<Book>,
+        sessions: List<ReadingSession>,
+        highlights: List<Highlight>,
+        annualGoal: Int,
+        dailyMinutesGoal: Int,
+    ): StatsState {
         val finished = books.count { it.status == ReadStatus.FINISHED }
         val minutesByDay = sessions.groupBy { it.day }.mapValues { (_, s) -> s.sumOf { it.durationMillis } / 60000 }
 
@@ -69,7 +77,8 @@ class StatsViewModel(app: FolioApp) : ViewModel() {
             c.add(Calendar.DAY_OF_YEAR, -offset)
             (minutesByDay[dayFmt.format(c.time)] ?: 0L).toInt()
         }
-        val hoursThisWeek = weekMinutes.sum() / 60f
+        val minutesThisWeek = weekMinutes.sum()
+        val minutesToday = (minutesByDay[dayFmt.format(today.time)] ?: 0L).toInt()
 
         val heat = (125 downTo 0).map { offset ->
             val c = today.clone() as Calendar
@@ -103,11 +112,13 @@ class StatsViewModel(app: FolioApp) : ViewModel() {
             goal = annualGoal,
             currentStreak = streak,
             longestStreak = longest,
-            hoursThisWeek = hoursThisWeek,
+            minutesThisWeek = minutesThisWeek,
             weekMinutes = weekMinutes,
             heat = heat,
             pagesYear = pagesYear,
-            hoursYear = totalMinutesYear / 60f,
+            minutesYear = totalMinutesYear.toInt(),
+            minutesToday = minutesToday,
+            dailyMinutesGoal = dailyMinutesGoal,
             genreBreakdown = genreBreakdown,
             topAuthors = topAuthors,
             highlights = highlights,

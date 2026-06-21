@@ -56,8 +56,10 @@ fun SettingsScreen(back: () -> Unit = {}) {
     val userPrefs by userVm.prefs.collectAsState()
     var reminder by remember { mutableStateOf(true) }
     var showGoalDialog by remember { mutableStateOf(false) }
+    var showMinutesGoalDialog by remember { mutableStateOf(false) }
     val displayName = userPrefs?.name?.takeIf { it.isNotBlank() } ?: "Reader"
     val annualGoal = userPrefs?.annualGoal ?: 24
+    val dailyMinutesGoal = userPrefs?.dailyMinutesGoal ?: 20
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
         item {
@@ -113,6 +115,11 @@ fun SettingsScreen(back: () -> Unit = {}) {
                     detail = "$annualGoal books",
                     onClick = { showGoalDialog = true },
                 )
+                SettingsRow(
+                    "Daily reading target",
+                    detail = "$dailyMinutesGoal min",
+                    onClick = { showMinutesGoalDialog = true },
+                )
                 SettingsRow("Daily reminder", toggle = true, on = reminder, onToggle = { reminder = it }, last = true)
             }
         }
@@ -135,6 +142,8 @@ fun SettingsScreen(back: () -> Unit = {}) {
     if (showGoalDialog) {
         GoalDialog(
             current = annualGoal,
+            title = "Annual reading goal",
+            placeholder = "Books this year",
             onDismiss = { showGoalDialog = false },
             onSave = { goal ->
                 userVm.update { it.copy(annualGoal = goal) }
@@ -142,19 +151,32 @@ fun SettingsScreen(back: () -> Unit = {}) {
             },
         )
     }
+
+    if (showMinutesGoalDialog) {
+        GoalDialog(
+            current = dailyMinutesGoal,
+            title = "Daily reading target",
+            placeholder = "Minutes per day",
+            onDismiss = { showMinutesGoalDialog = false },
+            onSave = { goal ->
+                userVm.update { it.copy(dailyMinutesGoal = goal) }
+                showMinutesGoalDialog = false
+            },
+        )
+    }
 }
 
 @Composable
-private fun GoalDialog(current: Int, onDismiss: () -> Unit, onSave: (Int) -> Unit) {
+private fun GoalDialog(current: Int, title: String, placeholder: String, onDismiss: () -> Unit, onSave: (Int) -> Unit) {
     var text by remember { mutableStateOf(current.toString()) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Annual reading goal") },
+        title = { Text(title) },
         text = {
             OutlinedTextField(
                 value = text,
                 onValueChange = { v -> if (v.all { it.isDigit() }) text = v },
-                placeholder = { Text("Books this year") },
+                placeholder = { Text(placeholder) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             )

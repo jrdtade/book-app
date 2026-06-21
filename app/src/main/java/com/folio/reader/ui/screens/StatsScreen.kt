@@ -108,11 +108,31 @@ fun StatsScreen() {
         }
 
         item {
+            Card(Modifier.padding(20.dp, 4.dp).fillMaxWidth(), shape = RoundedCornerShape(18.dp)) {
+                Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(contentAlignment = Alignment.Center) {
+                        ProgressRing(pct = s.minutesToday.toFloat() / max(1, s.dailyMinutesGoal), size = 90.dp, strokeWidth = 9.dp)
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("${s.minutesToday}", style = MaterialTheme.typography.titleLarge)
+                            Text("min", color = Ink3, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                    Spacer(Modifier.width(20.dp))
+                    Column {
+                        Text("Daily reading target", color = Ink3, style = MaterialTheme.typography.labelLarge)
+                        Spacer(Modifier.height(6.dp))
+                        Text("${s.dailyMinutesGoal} min a day", style = MaterialTheme.typography.titleMedium)
+                    }
+                }
+            }
+        }
+
+        item {
             Card(Modifier.padding(20.dp, 8.dp).fillMaxWidth(), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.padding(20.dp)) {
                     Text("Time read · this week", color = Ink3, style = MaterialTheme.typography.labelLarge)
                     Spacer(Modifier.height(6.dp))
-                    Text("${"%.1f".format(s.hoursThisWeek)}h", style = MaterialTheme.typography.headlineMedium)
+                    Text("${s.minutesThisWeek} min", style = MaterialTheme.typography.headlineMedium)
                     Spacer(Modifier.height(16.dp))
                     val maxM = max(1, s.weekMinutes.max())
                     val days = listOf("M", "T", "W", "T", "F", "S", "S")
@@ -140,7 +160,7 @@ fun StatsScreen() {
         item {
             Row(Modifier.padding(20.dp, 8.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Totem("${s.pagesYear}", "Pages read", Modifier.weight(1f))
-                Totem("${"%.0f".format(s.hoursYear)}h", "Hours read", Modifier.weight(1f))
+                Totem("${s.minutesYear}", "Minutes read", Modifier.weight(1f))
             }
         }
 
