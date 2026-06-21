@@ -5,7 +5,7 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import com.folio.reader.epub.EpubParser
 import com.folio.reader.network.CoverCandidate
-import com.folio.reader.network.GoogleBooksApi
+import com.folio.reader.network.OpenLibraryApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
@@ -63,11 +63,17 @@ class BookRepository(private val context: Context) {
     suspend fun addHighlight(highlight: Highlight) = highlightDao.insert(highlight)
 
     suspend fun fetchSynopsis(book: Book) {
-        val synopsis = GoogleBooksApi.fetchSynopsis(book.title, book.author)
-        bookDao.update(book.copy(synopsis = synopsis, synopsisFetchFailed = synopsis == null))
+        val (synopsis, publishedDate) = OpenLibraryApi.fetchMetadata(book.title, book.author)
+        bookDao.update(
+            book.copy(
+                synopsis = synopsis,
+                synopsisFetchFailed = synopsis == null,
+                publishedDate = publishedDate ?: book.publishedDate,
+            ),
+        )
     }
 
-    suspend fun searchCoverCandidates(query: String): List<CoverCandidate> = GoogleBooksApi.searchCovers(query)
+    suspend fun searchCoverCandidates(query: String): List<CoverCandidate> = OpenLibraryApi.searchCovers(query)
 
     /** Downloads the chosen cover image into the book's own content directory and
      *  points the book at it, replacing whatever cover (or typographic fallback) it had. */

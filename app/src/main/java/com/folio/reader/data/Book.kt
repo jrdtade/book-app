@@ -30,6 +30,7 @@ data class Book(
     /** Synopsis fetched from the Google Books API, cached locally once found. */
     var synopsis: String? = null,
     var synopsisFetchFailed: Boolean = false,
+    var publishedDate: String? = null,
 )
 
 fun Book.overallProgress(): Float =
